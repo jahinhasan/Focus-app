@@ -1,5 +1,5 @@
 import tkinter as tk
-import subprocess
+
 
 from tkinter import ttk
 
@@ -16,17 +16,28 @@ class FocusDashboard:
         self.root = root
         self.data = load_data()
         self.overlay = False
-        self.overlay_alpha = 0.85
+        self.overlay_alpha = 1.0
+
 
         from logic import reset_tasks_for_new_day
         reset_tasks_for_new_day(self.data)
 
         self.view = "today"
-        self.fullscreen = True
 
         root.title("Focus Dashboard")
-        root.attributes("-fullscreen", True)
-        root.attributes("-topmost", True)
+        # --- Floating focus panel startup ---
+        root.attributes("-topmost", False)
+        root.resizable(False, False)
+
+        PANEL_SIZE = 720  # perfect square-ish
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+
+        x = (sw - PANEL_SIZE) // 2
+        y = (sh - PANEL_SIZE) // 2
+
+        root.geometry(f"{PANEL_SIZE}x{PANEL_SIZE}+{x}+{y}")
+
         # ---------- ROOT GRID LAYOUT ----------
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -42,15 +53,14 @@ class FocusDashboard:
         self.main_area.grid_columnconfigure(0, weight=1)
 
 # ---------- WALLPAPER / CONTENT LAYER ----------
-        self.wallpaper_layer = tk.Frame(self.main_area)
-        self.wallpaper_layer.grid(row=0, column=0, sticky="nsew")
-
+       
        
         # Center wrapper (fixed width, centered)
-        self.center_wrapper = tk.Frame(self.wallpaper_layer)
+        self.center_wrapper = tk.Frame(self.main_area)
+
         self.center_wrapper.place(relx=0.5, rely=0.0, relheight=1.0, anchor="n")
         self.center_wrapper.config(width=720)
-        self.center_wrapper.pack_propagate(False)
+        
 
 
 
@@ -71,7 +81,7 @@ class FocusDashboard:
         self.click_through = False
         self.root.attributes("-topmost", False)
 
-        root.bind("<F11>", self.toggle_fullscreen)
+        
         root.bind("<Control-n>", lambda e: self.task_entry.focus())
         root.bind("<Control-h>", lambda e: self.switch_view(
             "history" if self.view == "today" else "today"
@@ -81,10 +91,7 @@ class FocusDashboard:
         root.bind("<Escape>", lambda e: self.toggle_overlay() if self.overlay else None)
         #root.bind("<F8>", lambda e: self.toggle_click_through())
         root.bind("<F6>", lambda e: self.change_opacity(-0.05))
-        root.bind("<F7>", lambda e: self.change_opacity(0.05))
-        root.bind("<Alt-Left>", lambda e: self.dock("left"))
-        root.bind("<Alt-Right>", lambda e: self.dock("right"))
-        root.bind("<Alt-Up>", lambda e: self.dock("top"))
+       
         self.root.after(100, self.refresh_tasks)
   
 
@@ -118,8 +125,7 @@ class FocusDashboard:
         right = tk.Frame(self.top_bar)
         right.grid(row=0, column=2, sticky="e", padx=12)
 
-        tk.Button(right, text="🗖", width=3,
-                command=self.toggle_fullscreen).pack(side="left")
+        
         tk.Button(right, text="—", width=3,
                 command=self.root.iconify).pack(side="left")
         tk.Button(right, text="❌", width=3, fg="red",
@@ -176,7 +182,7 @@ class FocusDashboard:
             "<Configure>",
             lambda e: self.canvas.itemconfig(
                 self.board_window,
-                width=min(1100, e.width)
+                width=min(680, e.width-20)
             )
         )
 
@@ -358,11 +364,7 @@ class FocusDashboard:
         self.board_frame.grid_anchor("center")
 
     # ================= UTIL =================
-    def toggle_fullscreen(self, event=None):
-        self.fullscreen = not self.fullscreen
-        self.root.attributes("-fullscreen", self.fullscreen)
-        if not self.fullscreen:
-            self.root.geometry("900x600")
+    
     def switch_view(self, view):
         self.view = view
 
@@ -380,74 +382,43 @@ class FocusDashboard:
 
        
     def change_opacity(self, delta):
+        if not self.overlay:
+            return
         self.overlay_alpha = min(1.0, max(0.3, self.overlay_alpha + delta))
         self.root.attributes("-alpha", self.overlay_alpha)
-    def dock(self, position):
-        w = self.root.winfo_screenwidth()
-        h = self.root.winfo_screenheight()
 
-        if position == "left":
-            self.root.geometry(f"400x{h}+0+0")
-        elif position == "right":
-            self.root.geometry(f"400x{h}+{w-400}+0")
-        elif position == "top":
-            self.root.geometry(f"{w}x200+0+0")
     def toggle_overlay(self, event=None):
         self.overlay = not self.overlay
 
         if self.overlay:
-            # ---- ENTER OVERLAY ----
+            # Focus mode (compact, subtle)
+            self.root.attributes("-alpha", 0.92)
+            self.root.resizable(False, False)
+
+            size = 560
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
 
-            self.root.attributes("-fullscreen", True)
-            self.root.overrideredirect(True)
-            self.root.attributes("-alpha", self.overlay_alpha)
+            x = (sw - size) // 2
+            y = (sh - size) // 2
 
-            # move UI to center
-            if self.center_wrapper.winfo_manager() == "pack":
-                self.center_wrapper.pack_forget()
-
-            self.center_wrapper.place(
-                relx=0.5,
-                rely=0.5,
-                anchor="center",
-                width=min(800, sw - 200)
-            )
-
-            self.set_desktop_layer()
-
-            # VERY IMPORTANT
-            self.root.attributes("-topmost", False)
+            self.root.geometry(f"{size}x{size}+{x}+{y}")
 
         else:
-            # ---- EXIT OVERLAY ----
-            if self.center_wrapper.winfo_manager() == "place":
-                self.center_wrapper.place_forget()
-
-            self.root.overrideredirect(False)
+            # Normal mode
             self.root.attributes("-alpha", 1.0)
-            self.root.attributes("-fullscreen", self.fullscreen)
+            self.root.resizable(False, False)
 
-            self.center_wrapper.pack(fill="both", expand=True)
+            size = 720
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
 
-            if hasattr(self, "overlay_bar"):
-                self.overlay_bar.destroy()
+            x = (sw - size) // 2
+            y = (sh - size) // 2
 
-    def set_desktop_layer(self):
-        self.root.update_idletasks()
-        wid = self.root.winfo_id()
+            self.root.geometry(f"{size}x{size}+{x}+{y}")
 
-        subprocess.call([
-            "wmctrl", "-i", "-r", str(wid),
-            "-b", "add,below,sticky,skip_taskbar,skip_pager"
-        ])
 
-        # Force unfocus so other apps receive input
-        subprocess.call([
-            "wmctrl", "-r", ":ACTIVE:",
-            "-b", "remove,above"
-        ])
 
     def _update_scroll(self, event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
