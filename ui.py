@@ -27,25 +27,47 @@ class FocusDashboard:
         root.title("Focus Dashboard")
         root.attributes("-fullscreen", True)
         root.attributes("-topmost", True)
-# --- WALLPAPER CENTER WRAPPER ---
-# wallpaper layer (fills screen)
-        self.wallpaper_layer = tk.Frame(self.root)
-        self.wallpaper_layer.pack(fill="both", expand=True)
+        # ---------- ROOT GRID LAYOUT ----------
+        self.root.grid_rowconfigure(1, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
 
-        # centered column (fixed width)
+        # Top system bar (full width)
+        self.top_bar = tk.Frame(self.root)
+        self.top_bar.grid(row=0, column=0, sticky="ew")
+
+        # Main content area (fills rest)
+        self.main_area = tk.Frame(self.root)
+        self.main_area.grid(row=1, column=0, sticky="nsew")
+        self.main_area.grid_rowconfigure(0, weight=1)
+        self.main_area.grid_columnconfigure(0, weight=1)
+
+# ---------- WALLPAPER / CONTENT LAYER ----------
+        self.wallpaper_layer = tk.Frame(self.main_area)
+        self.wallpaper_layer.grid(row=0, column=0, sticky="nsew")
+
+       
+        # Center wrapper (fixed width, centered)
         self.center_wrapper = tk.Frame(self.wallpaper_layer)
-        self.center_wrapper.pack(pady=40, fill="y")
-
-        # limit width so tasks don't stretch
+        self.center_wrapper.place(relx=0.5, rely=0.0, relheight=1.0, anchor="n")
+        self.center_wrapper.config(width=720)
         self.center_wrapper.pack_propagate(False)
-        self.center_wrapper.config(width=720,height=800)
+
+
 
         self.build_header()
+
+        # INPUT LAYER (isolated, centered)
+        self.input_layer = tk.Frame(self.center_wrapper)
+        self.input_layer.pack(fill="x")
+
         self.build_task_input()
+
+        # BOARD LAYER (cards only)
         self.build_scroll_area()
+
         self.bind_mouse_wheel()
 
-        self.render_tasks()
+        
         self.click_through = False
         self.root.attributes("-topmost", False)
 
@@ -63,49 +85,45 @@ class FocusDashboard:
         root.bind("<Alt-Left>", lambda e: self.dock("left"))
         root.bind("<Alt-Right>", lambda e: self.dock("right"))
         root.bind("<Alt-Up>", lambda e: self.dock("top"))
-       
+        self.root.after(100, self.refresh_tasks)
+  
 
     # ================= HEADER =================
     def build_header(self):
-        header = tk.Frame(self.center_wrapper)
-        header.pack(fill="x", padx=10, pady=5)
+        # 3-column header layout
+        self.top_bar.grid_columnconfigure(0, weight=0)
+        self.top_bar.grid_columnconfigure(1, weight=1)
+        self.top_bar.grid_columnconfigure(2, weight=0)
+
+        # LEFT: TODAY
+        left = tk.Frame(self.top_bar)
+        left.grid(row=0, column=0, sticky="w", padx=12)
 
         tk.Label(
-            header, text="🎯 TODAY",
-            font=("Arial", 16, "bold")
-        ).pack(side="left")
+            left, text="🎯 TODAY",
+            font=("Arial", 14, "bold")
+        ).pack()
 
-        btns = tk.Frame(header)
-        btns.pack(side="right")
+        # CENTER: LEVEL + XP
+        center = tk.Frame(self.top_bar)
+        center.grid(row=0, column=1)
 
-        tk.Button(btns, text="🗖", width=3,
-                  command=self.toggle_fullscreen).pack(side="left")
-        tk.Button(btns, text="—", width=3,
-                  command=self.root.iconify).pack(side="left")
-        tk.Button(btns, text="❌", width=3, fg="red",
-                  command=self.root.destroy).pack(side="left")
-        tk.Button(
-            btns, text="🪟",
-            width=3,
-            command=self.toggle_overlay
-        ).pack(side="left")
-
-
-        self.level_label = tk.Label(self.center_wrapper, font=("Arial", 14, "bold"))
+        self.level_label = tk.Label(center, font=("Arial", 16, "bold"))
         self.level_label.pack()
 
-        self.xp_bar = ttk.Progressbar(self.center_wrapper, length=320, maximum=100)
-        self.xp_bar.pack(pady=4)
+        self.xp_bar = ttk.Progressbar(center, length=360, maximum=100)
+        self.xp_bar.pack(pady=2)
 
-        nav = tk.Frame(self.center_wrapper)
-        nav.pack(pady=4)
+        # RIGHT: window buttons
+        right = tk.Frame(self.top_bar)
+        right.grid(row=0, column=2, sticky="e", padx=12)
 
-        tk.Button(nav, text="📅 Today",
-                  command=lambda: self.switch_view("today")).pack(side="left", padx=5)
-        tk.Button(nav, text="🕘 History",
-                  command=lambda: self.switch_view("history")).pack(side="left", padx=5)
-
-        self.update_stats()
+        tk.Button(right, text="🗖", width=3,
+                command=self.toggle_fullscreen).pack(side="left")
+        tk.Button(right, text="—", width=3,
+                command=self.root.iconify).pack(side="left")
+        tk.Button(right, text="❌", width=3, fg="red",
+                command=self.root.destroy).pack(side="left")
 
     def update_stats(self):
         level, xp = get_stats(self.data)
@@ -114,7 +132,8 @@ class FocusDashboard:
 
     # ================= ADD TASK =================
     def build_task_input(self):
-        frame = tk.Frame(self.center_wrapper)
+        frame = tk.Frame(self.input_layer)
+
         frame.pack(fill="x", padx=10, pady=5)
 
         self.task_entry = tk.Entry(frame)
@@ -131,65 +150,86 @@ class FocusDashboard:
 
     # ================= SCROLL =================
     def build_scroll_area(self):
-        container = tk.Frame(self.center_wrapper)
-        container.pack(fill="both", expand=True)
+        # BOARD LAYER (HTML equivalent of .board)
+        board_container = tk.Frame(self.center_wrapper)
+        board_container.pack(fill="both", expand=True)
 
-        self.canvas = tk.Canvas(container)
-        self.scrollbar = tk.Scrollbar(container, orient="vertical",
-                                 command=self.canvas.yview)
+        self.scrollbar = tk.Scrollbar(board_container, orient="vertical")
+        self.scrollbar.pack(side="left", fill="y")
 
-        self.task_frame = tk.Frame(self.canvas)
-        self.task_frame.bind("<Configure>", self._update_scroll)
+        self.canvas = tk.Canvas(board_container)
+        self.canvas.pack(side="right", fill="both", expand=True)
 
-        
-
-
-        # create window and keep its id so we can match its width to the canvas
-        self.task_window = self.canvas.create_window((0, 0),
-                                 window=self.task_frame,
-                                 anchor="nw")
-        # keep the task window width equal to canvas width so children center correctly
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.task_window, width=self.canvas.winfo_width()))
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.configure(command=self.canvas.yview)
 
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        # BOARD FRAME (centered grid holder)
+        self.board_frame = tk.Frame(self.canvas)
+        self.board_window = self.canvas.create_window(
+            (0, 0),
+            window=self.board_frame,
+            anchor="n"
+        )
 
-    def bind_mouse_wheel(self):
-        self.canvas.bind_all("<Button-4>", self._on_mouse_wheel)
-        self.canvas.bind_all("<Button-5>", self._on_mouse_wheel)
+        # Keep board centered
+        self.canvas.bind(
+            "<Configure>",
+            lambda e: self.canvas.itemconfig(
+                self.board_window,
+                width=min(1100, e.width)
+            )
+        )
 
-    def _on_mouse_wheel(self, event):
-        self.canvas.yview_scroll(-1 if event.num == 4 else 1, "units")
+        self.board_frame.bind("<Configure>", self._update_scroll)
 
     # ================= RENDER =================
-    def refresh_tasks(self):
-        for w in self.task_frame.winfo_children():
+    def render_tasks(self):
+        for w in self.board_frame.winfo_children():
             w.destroy()
 
-        if self.view == "today":
-            self.render_tasks()
-        else:
-            self.render_history()
+        if not self.data.get("tasks"):
+            tk.Label(
+                self.board_frame,
+                text="No tasks yet. Add one above 👆",
+                font=("Arial", 12),
+                fg="gray"
+            ).grid(pady=40)
+            self.board_frame.grid_anchor("center")
+            return
 
-        self.update_stats()
+        for i in range(self.board_frame.grid_size()[0]):
+            self.board_frame.grid_columnconfigure(i, weight=0)
 
-    def render_tasks(self):
-        # Render all tasks as a centered vertical column
+
+        cols = max(1, self.canvas.winfo_width() // 360)
+
+        for c in range(cols):
+            self.board_frame.grid_columnconfigure(c, weight=1)
+
+        row = col = 0
+
         for ti, task in enumerate(self.data.get("tasks", [])):
-            self.render_task(ti, task)
+            card = self.render_task(ti, task)
+            card.grid(row=row, column=col, padx=20, pady=20, sticky="n")
+        
+
+            col += 1
+            if col >= cols:
+                col = 0
+                row += 1
+        self.board_frame.grid_anchor("center")
+
 
     def render_task(self, ti, task):
-        # Each task is a compact card stacked vertically
-        frame = tk.Frame(self.task_frame, bd=1, relief="solid")
-        frame.pack(fill="x", padx=10, pady=6)
+        # TASK CARD (one self-contained layer)
+        frame = tk.Frame(self.board_frame, bd=1, relief="solid", padx=10, pady=8)
 
-        # ---- TASK TITLE ----
-        title_row = tk.Frame(frame)
-        title_row.pack(fill="x", padx=5)
+        # ---- TASK HEADER ----
+        header = tk.Frame(frame)
+        header.pack(fill="x")
 
         title_lbl = tk.Label(
-            title_row,
+            header,
             text=("✔ " if task.get("done") else "⬜ ") + task.get("title", ""),
             font=("Arial", 11, "bold")
         )
@@ -197,32 +237,37 @@ class FocusDashboard:
 
         def edit_task_inline():
             title_lbl.pack_forget()
-            entry = tk.Entry(title_row)
+            entry = tk.Entry(header)
             entry.insert(0, task.get("title", ""))
             entry.pack(side="left", fill="x", expand=True)
-            entry.bind("<Escape>", lambda e: self.refresh_tasks())
+            entry.focus()
 
-            tk.Button(title_row, text="✔",
-                      command=lambda: (
-                          edit_task(self.data, ti, entry.get()),
-                          self.refresh_tasks()
-                      )).pack(side="left")
+            tk.Button(
+                header, text="✔",
+                command=lambda: (
+                    edit_task(self.data, ti, entry.get()),
+                    self.refresh_tasks()
+                )
+            ).pack(side="right")
 
-            tk.Button(title_row, text="✖",
-                      command=self.refresh_tasks).pack(side="left")
+            tk.Button(
+                header, text="✖",
+                command=self.refresh_tasks
+            ).pack(side="right")
 
-        tk.Button(title_row, text="✏",
-                  command=edit_task_inline).pack(side="right")
-        tk.Button(title_row, text="❌",
-                  command=lambda: (
-                      delete_task(self.data, ti),
-                      self.refresh_tasks()
-                  )).pack(side="right")
+        tk.Button(header, text="✏", command=edit_task_inline).pack(side="right")
+        tk.Button(
+            header, text="❌",
+            command=lambda: (
+                delete_task(self.data, ti),
+                self.refresh_tasks()
+            )
+        ).pack(side="right")
 
-        # ---- SUBTASKS ----
+        # ---- SUBTASK LIST ----
         for si, sub in enumerate(task.get("subtasks", [])):
             row = tk.Frame(frame)
-            row.pack(fill="x", padx=20)
+            row.pack(fill="x", padx=10, pady=2)
 
             var = tk.BooleanVar(value=sub.get("done", False))
             tk.Checkbutton(
@@ -233,8 +278,7 @@ class FocusDashboard:
                 )
             ).pack(side="left")
 
-            lbl = tk.Label(row, text=sub.get("title", ""))
-            lbl.pack(side="left")
+            tk.Label(row, text=sub.get("title", "")).pack(side="left")
 
             def edit_subtask_inline(r=row, t=ti, s=si, text=sub.get("title", "")):
                 for w in r.winfo_children():
@@ -243,56 +287,75 @@ class FocusDashboard:
                 entry = tk.Entry(r)
                 entry.insert(0, text)
                 entry.pack(side="left", fill="x", expand=True)
-                entry.bind("<Escape>", lambda e: self.refresh_tasks())
+                entry.focus()
 
+                tk.Button(
+                    r, text="✔",
+                    command=lambda: (
+                        edit_subtask(self.data, t, s, entry.get()),
+                        self.refresh_tasks()
+                    )
+                ).pack(side="right")
 
-                tk.Button(r, text="✔",
-                          command=lambda: (
-                              edit_subtask(self.data, t, s, entry.get()),
-                              self.refresh_tasks()
-                          )).pack(side="left")
-                tk.Button(r, text="✖",
-                          command=self.refresh_tasks).pack(side="left")
+                tk.Button(
+                    r, text="✖",
+                    command=self.refresh_tasks
+                ).pack(side="right")
 
-            tk.Button(row, text="✏",
-                      command=edit_subtask_inline).pack(side="right")
-            tk.Button(row, text="❌",
-                      command=lambda t=ti, s=si: (
-                          delete_subtask(self.data, t, s),
-                          self.refresh_tasks()
-                      )).pack(side="right")
+            tk.Button(row, text="✏", command=edit_subtask_inline).pack(side="right")
+            tk.Button(
+                row, text="❌",
+                command=lambda t=ti, s=si: (
+                    delete_subtask(self.data, t, s),
+                    self.refresh_tasks()
+                )
+            ).pack(side="right")
 
         # ---- ADD SUBTASK ----
         add_row = tk.Frame(frame)
-        add_row.pack(fill="x", padx=20, pady=3)
+        add_row.pack(fill="x", padx=10, pady=5)
 
         entry = tk.Entry(add_row)
         entry.pack(side="left", fill="x", expand=True)
 
-        tk.Button(add_row, text="➕",
-                  command=lambda: (
-                      add_subtask(self.data, ti, entry.get()),
-                      self.refresh_tasks()
-                  )).pack(side="right")
+        tk.Button(
+            add_row, text="➕",
+            command=lambda: (
+                add_subtask(self.data, ti, entry.get()),
+                self.refresh_tasks()
+            )
+        ).pack(side="right")
+
+        return frame
 
     # ================= HISTORY =================
     def render_history(self):
+        
+        for w in self.board_frame.winfo_children():
+            w.destroy()
+        
+        
         history = self.data.get("history", {})
 
         if not history:
-            tk.Label(self.task_frame, text="No history yet").pack(pady=20)
+            tk.Label(self.board_frame, text="No history yet").grid(pady=20)
             return
 
+        row = 0
         for day, info in sorted(history.items(), reverse=True):
-            box = tk.Frame(self.task_frame, bd=1, relief="solid")
-            box.pack(fill="x", padx=10, pady=5)
+            box = tk.Frame(self.board_frame, bd=1, relief="solid", padx=10, pady=8)
+            box.grid(row=row, column=0, padx=20, pady=10, sticky="n")
 
             tk.Label(box, text=f"📅 {day}",
-                     font=("Arial", 11, "bold")).pack(anchor="w", padx=5)
+                    font=("Arial", 11, "bold")).pack(anchor="w")
             tk.Label(box,
-                     text=f"✔ {info['completed']} / {info['total']}").pack(anchor="w", padx=15)
+                    text=f"✔ {info['completed']} / {info['total']}").pack(anchor="w", padx=10)
             tk.Label(box,
-                     text=f"⭐ XP gained: {info['xp_gained']:.1f}").pack(anchor="w", padx=15)
+                    text=f"⭐ XP gained: {info['xp_gained']:.1f}").pack(anchor="w", padx=10)
+
+            row += 1
+
+        self.board_frame.grid_anchor("center")
 
     # ================= UTIL =================
     def toggle_fullscreen(self, event=None):
@@ -300,10 +363,16 @@ class FocusDashboard:
         self.root.attributes("-fullscreen", self.fullscreen)
         if not self.fullscreen:
             self.root.geometry("900x600")
-
     def switch_view(self, view):
         self.view = view
-        self.refresh_tasks()
+
+        if self.view == "today":
+            self.render_tasks()
+        else:
+            self.render_history()
+
+        self.update_stats()
+
 
   
     def toggle_click_through(self):
@@ -440,15 +509,33 @@ class FocusDashboard:
             "-b", "add,below,sticky,skip_taskbar"
         ])
     def _update_scroll(self, event=None):
-        # update scroll region and show/hide scrollbar only when needed
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
-        if self.task_frame.winfo_height() > self.canvas.winfo_height():
+        needs_scroll = self.board_frame.winfo_reqheight() > self.canvas.winfo_height()
+
+        if needs_scroll:
             if not self.scrollbar.winfo_ismapped():
-                self.scrollbar.pack(side="right", fill="y")
+                self.scrollbar.pack(side="left", fill="y")
         else:
             if self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack_forget()
+    def bind_mouse_wheel(self):
+        self.canvas.bind_all("<Button-4>", lambda e: self.canvas.yview_scroll(-1, "units"))
+        self.canvas.bind_all("<Button-5>", lambda e: self.canvas.yview_scroll(1, "units"))
+    def refresh_tasks(self):
+        for w in self.board_frame.winfo_children():
+            w.destroy()
+
+        if self.view == "today":
+            self.render_tasks()
+        else:
+            self.render_history()
+
+        self.update_stats()
+        self._update_scroll()
+        self.canvas.yview_moveto(0)
+
+
 
 def start_ui():
     root = tk.Tk()

@@ -1,6 +1,6 @@
 {
     "level": 1,
-    "xp": 16.666666666666664,
+    "xp": 21.428571428571423,
     "streak": 0,
     "last_date": "2026-01-07",
     "tasks": [
@@ -20,15 +20,15 @@
         },
         {
             "title": "Learn Kotlin",
-            "done": false,
+            "done": true,
             "subtasks": [
                 {
                     "title": "Functions",
-                    "done": false
+                    "done": true
                 },
                 {
                     "title": "Practice examples",
-                    "done": false
+                    "done": true
                 }
             ]
         },
@@ -52,6 +52,11 @@
             "completed": 7,
             "total": 3,
             "xp_gained": 19.047619047619044
+        },
+        "2026-01-07": {
+            "completed": 2,
+            "total": 3,
+            "xp_gained": 4.761904761904762
         }
     }
 }
