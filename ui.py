@@ -13,6 +13,9 @@ class FocusDashboard:
     def __init__(self, root):
         self.root = root
         self.data = load_data()
+        self.overlay = False
+        self.overlay_alpha = 0.85
+
         from logic import reset_tasks_for_new_day
         reset_tasks_for_new_day(self.data)
 
@@ -34,6 +37,9 @@ class FocusDashboard:
         root.bind("<Control-h>", lambda e: self.switch_view(
             "history" if self.view == "today" else "today"
         ))
+        root.bind("<F9>", self.toggle_overlay)
+        root.bind("<Escape>", lambda e: self.toggle_overlay() if self.overlay else None)
+
 
     # ================= HEADER =================
     def build_header(self):
@@ -54,6 +60,12 @@ class FocusDashboard:
                   command=self.root.iconify).pack(side="left")
         tk.Button(btns, text="❌", width=3, fg="red",
                   command=self.root.destroy).pack(side="left")
+        tk.Button(
+            btns, text="🪟",
+            width=3,
+            command=self.toggle_overlay
+        ).pack(side="left")
+
 
         self.level_label = tk.Label(self.root, font=("Arial", 14, "bold"))
         self.level_label.pack()
@@ -265,6 +277,21 @@ class FocusDashboard:
     def switch_view(self, view):
         self.view = view
         self.refresh_tasks()
+
+    def toggle_overlay(self, event=None):
+        self.overlay = not self.overlay
+
+        if self.overlay:
+            # Overlay mode
+            self.root.overrideredirect(True)
+            self.root.attributes("-topmost", True)
+            self.root.attributes("-alpha", self.overlay_alpha)
+        else:
+            # Normal window mode
+            self.root.overrideredirect(False)
+            self.root.attributes("-topmost", False)
+            self.root.attributes("-alpha", 1.0)
+
 
 
 def start_ui():
