@@ -378,10 +378,7 @@ class FocusDashboard:
     def toggle_click_through(self):
         self.click_through = not self.click_through
 
-        if self.click_through:
-            self.root.attributes("-disabled", True)
-        else:
-            self.root.attributes("-disabled", False)
+       
     def change_opacity(self, delta):
         self.overlay_alpha = min(1.0, max(0.3, self.overlay_alpha + delta))
         self.root.attributes("-alpha", self.overlay_alpha)
@@ -396,118 +393,62 @@ class FocusDashboard:
         elif position == "top":
             self.root.geometry(f"{w}x200+0+0")
     def toggle_overlay(self, event=None):
-        # Toggle overlay state and ensure layout-manager safety
         self.overlay = not self.overlay
 
         if self.overlay:
-            # Overlay ON: disable fullscreen, use overrideredirect,
-            # set full-screen geometry and switch center_wrapper to place
+            # ---- ENTER OVERLAY ----
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
 
-            # Ensure root is fullscreen for wallpaper behavior
-            try:
-                self.root.attributes("-fullscreen", True)
-            except Exception:
-                pass
-
-            # If center_wrapper is managed by pack, remove it first
-            try:
-                if self.center_wrapper.winfo_manager() == "pack":
-                    self.center_wrapper.pack_forget()
-            except Exception:
-                pass
-
-            # Calculate constrained width for centered column (600-800px range)
-            desired_width = max(600, min(800, sw - 200)) if sw > 800 else max(400, sw - 100)
-
-            # Prevent children from expanding the frame beyond desired width
-            try:
-                self.center_wrapper.pack_propagate(False)
-            except Exception:
-                pass
-
+            self.root.attributes("-fullscreen", True)
             self.root.overrideredirect(True)
             self.root.attributes("-alpha", self.overlay_alpha)
 
-            # center the UI using place with a fixed width (no simultaneous pack)
-            self.center_wrapper.place(relx=0.5, rely=0.5, anchor="center", width=desired_width)
+            # move UI to center
+            if self.center_wrapper.winfo_manager() == "pack":
+                self.center_wrapper.pack_forget()
+
+            self.center_wrapper.place(
+                relx=0.5,
+                rely=0.5,
+                anchor="center",
+                width=min(800, sw - 200)
+            )
 
             self.set_desktop_layer()
+
+            # VERY IMPORTANT
             self.root.attributes("-topmost", False)
 
-            self.root.focus_force()
-
-            # Overlay control bar (create if not present)
-            if not (hasattr(self, "overlay_bar") and getattr(self, "overlay_bar").winfo_exists()):
-                self.overlay_bar = tk.Frame(self.root, bg="#111")
-                self.overlay_bar.place(x=0, y=0, relwidth=1, height=30)
-                tk.Button(
-                    self.overlay_bar,
-                    text="✖ Exit Overlay",
-                    command=self.toggle_overlay,
-                    bg="#222",
-                    fg="white",
-                    bd=0
-                ).pack(side="right", padx=10)
-
         else:
-            # Overlay OFF: remove place, disable overrideredirect,
-            # restore fullscreen according to self.fullscreen and re-pack
-
-
-            # If center_wrapper is managed by place, remove it first
-            try:
-                if self.center_wrapper.winfo_manager() == "place":
-                    self.center_wrapper.place_forget()
-            except Exception:
-                pass
-
-            # Restore propagation so pack can resize the wrapper normally
-            try:
-                self.center_wrapper.pack_propagate(True)
-            except Exception:
-                pass
+            # ---- EXIT OVERLAY ----
+            if self.center_wrapper.winfo_manager() == "place":
+                self.center_wrapper.place_forget()
 
             self.root.overrideredirect(False)
-            
             self.root.attributes("-alpha", 1.0)
+            self.root.attributes("-fullscreen", self.fullscreen)
 
-            # Restore fullscreen to the saved self.fullscreen state
-            try:
-                self.root.attributes("-fullscreen", self.fullscreen)
-            except Exception:
-                pass
-
-            # If not restoring to fullscreen, set a reasonable window size
-            if not self.fullscreen:
-                self.root.geometry("900x600")
-
-            # Re-pack the center wrapper (no simultaneous place)
-            try:
-                if self.center_wrapper.winfo_manager() != "pack":
-                    self.center_wrapper.pack(fill="both", expand=True)
-            except Exception:
-                # Fallback: ensure it's packed
-                self.center_wrapper.pack(fill="both", expand=True)
+            self.center_wrapper.pack(fill="both", expand=True)
 
             if hasattr(self, "overlay_bar"):
-                try:
-                    self.overlay_bar.destroy()
-                except Exception:
-                    pass
+                self.overlay_bar.destroy()
 
     def set_desktop_layer(self):
-        """
-        Attach window to desktop layer (wallpaper-like behavior)
-        """
         self.root.update_idletasks()
         wid = self.root.winfo_id()
 
         subprocess.call([
             "wmctrl", "-i", "-r", str(wid),
-            "-b", "add,below,sticky,skip_taskbar"
+            "-b", "add,below,sticky,skip_taskbar,skip_pager"
         ])
+
+        # Force unfocus so other apps receive input
+        subprocess.call([
+            "wmctrl", "-r", ":ACTIVE:",
+            "-b", "remove,above"
+        ])
+
     def _update_scroll(self, event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
