@@ -32,14 +32,23 @@ class FocusDashboard:
         self.bind_mouse_wheel()
 
         self.render_tasks()
+        self.click_through = False
+
         root.bind("<F11>", self.toggle_fullscreen)
         root.bind("<Control-n>", lambda e: self.task_entry.focus())
         root.bind("<Control-h>", lambda e: self.switch_view(
             "history" if self.view == "today" else "today"
         ))
-        root.bind("<F9>", self.toggle_overlay)
-        root.bind("<Escape>", lambda e: self.toggle_overlay() if self.overlay else None)
+        self.root.bind_all("<F9>", self.toggle_overlay)
 
+        root.bind("<Escape>", lambda e: self.toggle_overlay() if self.overlay else None)
+        #root.bind("<F8>", lambda e: self.toggle_click_through())
+        root.bind("<F6>", lambda e: self.change_opacity(-0.05))
+        root.bind("<F7>", lambda e: self.change_opacity(0.05))
+        root.bind("<Alt-Left>", lambda e: self.dock("left"))
+        root.bind("<Alt-Right>", lambda e: self.dock("right"))
+        root.bind("<Alt-Up>", lambda e: self.dock("top"))
+       
 
     # ================= HEADER =================
     def build_header(self):
@@ -278,19 +287,61 @@ class FocusDashboard:
         self.view = view
         self.refresh_tasks()
 
+  
+    def toggle_click_through(self):
+        self.click_through = not self.click_through
+
+        if self.click_through:
+            self.root.attributes("-disabled", True)
+        else:
+            self.root.attributes("-disabled", False)
+    def change_opacity(self, delta):
+        self.overlay_alpha = min(1.0, max(0.3, self.overlay_alpha + delta))
+        self.root.attributes("-alpha", self.overlay_alpha)
+    def dock(self, position):
+        w = self.root.winfo_screenwidth()
+        h = self.root.winfo_screenheight()
+
+        if position == "left":
+            self.root.geometry(f"400x{h}+0+0")
+        elif position == "right":
+            self.root.geometry(f"400x{h}+{w-400}+0")
+        elif position == "top":
+            self.root.geometry(f"{w}x200+0+0")
     def toggle_overlay(self, event=None):
         self.overlay = not self.overlay
 
         if self.overlay:
-            # Overlay mode
+        # Overlay mode
             self.root.overrideredirect(True)
             self.root.attributes("-topmost", True)
             self.root.attributes("-alpha", self.overlay_alpha)
+            self.root.focus_force()
+
+        # Overlay control bar
+            self.overlay_bar = tk.Frame(
+                self.root,
+                bg="#111"
+            )
+            self.overlay_bar.place(x=0, y=0, relwidth=1, height=30)
+
+            tk.Button(
+               self.overlay_bar,
+               text="✖ Exit Overlay",
+               command=self.toggle_overlay,
+               bg="#222",
+               fg="white",
+               bd=0
+            ).pack(side="right", padx=10)
+
         else:
-            # Normal window mode
+        # Normal window mode
             self.root.overrideredirect(False)
             self.root.attributes("-topmost", False)
             self.root.attributes("-alpha", 1.0)
+
+            if hasattr(self, "overlay_bar"):
+                self.overlay_bar.destroy()
 
 
 
