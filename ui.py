@@ -1,4 +1,6 @@
 import tkinter as tk
+import subprocess
+
 from tkinter import ttk
 
 from logic import (
@@ -25,6 +27,18 @@ class FocusDashboard:
         root.title("Focus Dashboard")
         root.attributes("-fullscreen", True)
         root.attributes("-topmost", True)
+# --- WALLPAPER CENTER WRAPPER ---
+# wallpaper layer (fills screen)
+        self.wallpaper_layer = tk.Frame(self.root)
+        self.wallpaper_layer.pack(fill="both", expand=True)
+
+        # centered column (fixed width)
+        self.center_wrapper = tk.Frame(self.wallpaper_layer)
+        self.center_wrapper.pack(pady=40, fill="y")
+
+        # limit width so tasks don't stretch
+        self.center_wrapper.pack_propagate(False)
+        self.center_wrapper.config(width=720,height=800)
 
         self.build_header()
         self.build_task_input()
@@ -33,6 +47,7 @@ class FocusDashboard:
 
         self.render_tasks()
         self.click_through = False
+        self.root.attributes("-topmost", False)
 
         root.bind("<F11>", self.toggle_fullscreen)
         root.bind("<Control-n>", lambda e: self.task_entry.focus())
@@ -52,7 +67,7 @@ class FocusDashboard:
 
     # ================= HEADER =================
     def build_header(self):
-        header = tk.Frame(self.root)
+        header = tk.Frame(self.center_wrapper)
         header.pack(fill="x", padx=10, pady=5)
 
         tk.Label(
@@ -76,13 +91,13 @@ class FocusDashboard:
         ).pack(side="left")
 
 
-        self.level_label = tk.Label(self.root, font=("Arial", 14, "bold"))
+        self.level_label = tk.Label(self.center_wrapper, font=("Arial", 14, "bold"))
         self.level_label.pack()
 
-        self.xp_bar = ttk.Progressbar(self.root, length=320, maximum=100)
+        self.xp_bar = ttk.Progressbar(self.center_wrapper, length=320, maximum=100)
         self.xp_bar.pack(pady=4)
 
-        nav = tk.Frame(self.root)
+        nav = tk.Frame(self.center_wrapper)
         nav.pack(pady=4)
 
         tk.Button(nav, text="📅 Today",
@@ -99,7 +114,7 @@ class FocusDashboard:
 
     # ================= ADD TASK =================
     def build_task_input(self):
-        frame = tk.Frame(self.root)
+        frame = tk.Frame(self.center_wrapper)
         frame.pack(fill="x", padx=10, pady=5)
 
         self.task_entry = tk.Entry(frame)
@@ -116,28 +131,29 @@ class FocusDashboard:
 
     # ================= SCROLL =================
     def build_scroll_area(self):
-        container = tk.Frame(self.root)
+        container = tk.Frame(self.center_wrapper)
         container.pack(fill="both", expand=True)
 
         self.canvas = tk.Canvas(container)
-        scrollbar = tk.Scrollbar(container, orient="vertical",
+        self.scrollbar = tk.Scrollbar(container, orient="vertical",
                                  command=self.canvas.yview)
 
         self.task_frame = tk.Frame(self.canvas)
+        self.task_frame.bind("<Configure>", self._update_scroll)
 
-        self.task_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(
-                scrollregion=self.canvas.bbox("all"))
-        )
+        
 
-        self.canvas.create_window((0, 0),
-                                  window=self.task_frame,
-                                  anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        # create window and keep its id so we can match its width to the canvas
+        self.task_window = self.canvas.create_window((0, 0),
+                                 window=self.task_frame,
+                                 anchor="nw")
+        # keep the task window width equal to canvas width so children center correctly
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.task_window, width=self.canvas.winfo_width()))
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
         self.canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.scrollbar.pack(side="right", fill="y")
 
     def bind_mouse_wheel(self):
         self.canvas.bind_all("<Button-4>", self._on_mouse_wheel)
@@ -159,12 +175,14 @@ class FocusDashboard:
         self.update_stats()
 
     def render_tasks(self):
-        for ti, task in enumerate(self.data["tasks"]):
+        # Render all tasks as a centered vertical column
+        for ti, task in enumerate(self.data.get("tasks", [])):
             self.render_task(ti, task)
 
     def render_task(self, ti, task):
+        # Each task is a compact card stacked vertically
         frame = tk.Frame(self.task_frame, bd=1, relief="solid")
-        frame.pack(fill="x", padx=10, pady=4)
+        frame.pack(fill="x", padx=10, pady=6)
 
         # ---- TASK TITLE ----
         title_row = tk.Frame(frame)
@@ -172,7 +190,7 @@ class FocusDashboard:
 
         title_lbl = tk.Label(
             title_row,
-            text=("✔ " if task["done"] else "⬜ ") + task["title"],
+            text=("✔ " if task.get("done") else "⬜ ") + task.get("title", ""),
             font=("Arial", 11, "bold")
         )
         title_lbl.pack(side="left")
@@ -180,7 +198,7 @@ class FocusDashboard:
         def edit_task_inline():
             title_lbl.pack_forget()
             entry = tk.Entry(title_row)
-            entry.insert(0, task["title"])
+            entry.insert(0, task.get("title", ""))
             entry.pack(side="left", fill="x", expand=True)
             entry.bind("<Escape>", lambda e: self.refresh_tasks())
 
@@ -202,11 +220,11 @@ class FocusDashboard:
                   )).pack(side="right")
 
         # ---- SUBTASKS ----
-        for si, sub in enumerate(task["subtasks"]):
+        for si, sub in enumerate(task.get("subtasks", [])):
             row = tk.Frame(frame)
             row.pack(fill="x", padx=20)
 
-            var = tk.BooleanVar(value=sub["done"])
+            var = tk.BooleanVar(value=sub.get("done", False))
             tk.Checkbutton(
                 row, variable=var,
                 command=lambda v=var, t=ti, s=si: (
@@ -215,10 +233,10 @@ class FocusDashboard:
                 )
             ).pack(side="left")
 
-            lbl = tk.Label(row, text=sub["title"])
+            lbl = tk.Label(row, text=sub.get("title", ""))
             lbl.pack(side="left")
 
-            def edit_subtask_inline(r=row, t=ti, s=si, text=sub["title"]):
+            def edit_subtask_inline(r=row, t=ti, s=si, text=sub.get("title", "")):
                 for w in r.winfo_children():
                     w.destroy()
 
@@ -309,41 +327,128 @@ class FocusDashboard:
         elif position == "top":
             self.root.geometry(f"{w}x200+0+0")
     def toggle_overlay(self, event=None):
+        # Toggle overlay state and ensure layout-manager safety
         self.overlay = not self.overlay
 
         if self.overlay:
-        # Overlay mode
+            # Overlay ON: disable fullscreen, use overrideredirect,
+            # set full-screen geometry and switch center_wrapper to place
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+
+            # Ensure root is fullscreen for wallpaper behavior
+            try:
+                self.root.attributes("-fullscreen", True)
+            except Exception:
+                pass
+
+            # If center_wrapper is managed by pack, remove it first
+            try:
+                if self.center_wrapper.winfo_manager() == "pack":
+                    self.center_wrapper.pack_forget()
+            except Exception:
+                pass
+
+            # Calculate constrained width for centered column (600-800px range)
+            desired_width = max(600, min(800, sw - 200)) if sw > 800 else max(400, sw - 100)
+
+            # Prevent children from expanding the frame beyond desired width
+            try:
+                self.center_wrapper.pack_propagate(False)
+            except Exception:
+                pass
+
             self.root.overrideredirect(True)
-            self.root.attributes("-topmost", True)
             self.root.attributes("-alpha", self.overlay_alpha)
+
+            # center the UI using place with a fixed width (no simultaneous pack)
+            self.center_wrapper.place(relx=0.5, rely=0.5, anchor="center", width=desired_width)
+
+            self.set_desktop_layer()
+            self.root.attributes("-topmost", False)
+
             self.root.focus_force()
 
-        # Overlay control bar
-            self.overlay_bar = tk.Frame(
-                self.root,
-                bg="#111"
-            )
-            self.overlay_bar.place(x=0, y=0, relwidth=1, height=30)
-
-            tk.Button(
-               self.overlay_bar,
-               text="✖ Exit Overlay",
-               command=self.toggle_overlay,
-               bg="#222",
-               fg="white",
-               bd=0
-            ).pack(side="right", padx=10)
+            # Overlay control bar (create if not present)
+            if not (hasattr(self, "overlay_bar") and getattr(self, "overlay_bar").winfo_exists()):
+                self.overlay_bar = tk.Frame(self.root, bg="#111")
+                self.overlay_bar.place(x=0, y=0, relwidth=1, height=30)
+                tk.Button(
+                    self.overlay_bar,
+                    text="✖ Exit Overlay",
+                    command=self.toggle_overlay,
+                    bg="#222",
+                    fg="white",
+                    bd=0
+                ).pack(side="right", padx=10)
 
         else:
-        # Normal window mode
+            # Overlay OFF: remove place, disable overrideredirect,
+            # restore fullscreen according to self.fullscreen and re-pack
+
+
+            # If center_wrapper is managed by place, remove it first
+            try:
+                if self.center_wrapper.winfo_manager() == "place":
+                    self.center_wrapper.place_forget()
+            except Exception:
+                pass
+
+            # Restore propagation so pack can resize the wrapper normally
+            try:
+                self.center_wrapper.pack_propagate(True)
+            except Exception:
+                pass
+
             self.root.overrideredirect(False)
-            self.root.attributes("-topmost", False)
+            
             self.root.attributes("-alpha", 1.0)
 
+            # Restore fullscreen to the saved self.fullscreen state
+            try:
+                self.root.attributes("-fullscreen", self.fullscreen)
+            except Exception:
+                pass
+
+            # If not restoring to fullscreen, set a reasonable window size
+            if not self.fullscreen:
+                self.root.geometry("900x600")
+
+            # Re-pack the center wrapper (no simultaneous place)
+            try:
+                if self.center_wrapper.winfo_manager() != "pack":
+                    self.center_wrapper.pack(fill="both", expand=True)
+            except Exception:
+                # Fallback: ensure it's packed
+                self.center_wrapper.pack(fill="both", expand=True)
+
             if hasattr(self, "overlay_bar"):
-                self.overlay_bar.destroy()
+                try:
+                    self.overlay_bar.destroy()
+                except Exception:
+                    pass
 
+    def set_desktop_layer(self):
+        """
+        Attach window to desktop layer (wallpaper-like behavior)
+        """
+        self.root.update_idletasks()
+        wid = self.root.winfo_id()
 
+        subprocess.call([
+            "wmctrl", "-i", "-r", str(wid),
+            "-b", "add,below,sticky,skip_taskbar"
+        ])
+    def _update_scroll(self, event=None):
+        # update scroll region and show/hide scrollbar only when needed
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+        if self.task_frame.winfo_height() > self.canvas.winfo_height():
+            if not self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack(side="right", fill="y")
+        else:
+            if self.scrollbar.winfo_ismapped():
+                self.scrollbar.pack_forget()
 
 def start_ui():
     root = tk.Tk()
