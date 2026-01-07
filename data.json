@@ -1,0 +1,57 @@
+{
+    "level": 1,
+    "xp": 16.666666666666664,
+    "streak": 0,
+    "last_date": "2026-01-07",
+    "tasks": [
+        {
+            "title": "Solve DSA",
+            "done": false,
+            "subtasks": [
+                {
+                    "title": "2 easy problems",
+                    "done": false
+                },
+                {
+                    "title": "1 medium problem",
+                    "done": false
+                }
+            ]
+        },
+        {
+            "title": "Learn Kotlin",
+            "done": false,
+            "subtasks": [
+                {
+                    "title": "Functions",
+                    "done": false
+                },
+                {
+                    "title": "Practice examples",
+                    "done": false
+                }
+            ]
+        },
+        {
+            "title": "jahin",
+            "done": false,
+            "subtasks": [
+                {
+                    "title": "jahin",
+                    "done": false
+                },
+                {
+                    "title": "giid",
+                    "done": false
+                }
+            ]
+        }
+    ],
+    "history": {
+        "2026-01-06": {
+            "completed": 7,
+            "total": 3,
+            "xp_gained": 19.047619047619044
+        }
+    }
+}
