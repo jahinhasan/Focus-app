@@ -1,5 +1,5 @@
 import tkinter as tk
-
+import time
 
 from tkinter import ttk
 
@@ -9,6 +9,7 @@ from logic import (
     add_subtask, edit_subtask, delete_subtask,
     get_stats
 )
+print("### UI.PY VERSION 999 LOADED ###")
 
 
 class FocusDashboard:
@@ -29,7 +30,7 @@ class FocusDashboard:
         root.attributes("-topmost", False)
         root.resizable(False, False)
 
-        PANEL_SIZE = 720  # perfect square-ish
+        PANEL_SIZE = 1300  # perfect square-ish
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
 
@@ -51,7 +52,20 @@ class FocusDashboard:
         self.main_area.grid(row=1, column=0, sticky="nsew")
         self.main_area.grid_rowconfigure(0, weight=1)
         self.main_area.grid_columnconfigure(0, weight=1)
+        # Right side panel
+        # Right side panel
+        self.side_panel = tk.Frame(self.main_area, width=450, bg="#0f1115")
+        self.side_panel.grid(row=0, column=1, sticky="ns")
+        self.side_panel.grid_propagate(False)
 
+        self.main_area.grid_columnconfigure(1, weight=0)
+
+        self.clock = BigClock(self.side_panel)
+        self.clock.pack(pady=20)
+
+        self.timer_widget = TimerWidget(self.side_panel)
+        self.timer_widget.pack(pady=20)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 # ---------- WALLPAPER / CONTENT LAYER ----------
        
        
@@ -395,7 +409,7 @@ class FocusDashboard:
             self.root.attributes("-alpha", 0.92)
             self.root.resizable(False, False)
 
-            size = 560
+            size = 1200
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
 
@@ -446,8 +460,137 @@ class FocusDashboard:
         self.update_stats()
         self._update_scroll()
         self.canvas.yview_moveto(0)
+    
+
+    def on_close(self):
+        self.timer_widget.stop()
+        self.root.destroy()
 
 
+
+
+class BigClock(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent, bg="#0f1115")
+
+        self.label = tk.Label(
+            self,
+            text="00:00:00",
+            font=("Courier New", 42, "bold"),  # monospaced
+            fg="white",
+            bg="#0f1115",
+            width=8,          # HH:MM:SS
+            anchor="center"
+        )
+        self.label.pack(pady=10, fill="x")
+
+
+        self.update_clock()
+
+    def update_clock(self):
+        now = time.strftime("%H:%M:%S")
+        self.label.config(text=now)
+        self.after(1000, self.update_clock)
+
+class StopwatchTimer:
+    def __init__(self):
+        self.running = False
+        self.start_time = None
+        self.elapsed = 0.0
+
+    def start(self):
+        if not self.running:
+            self.start_time = time.time()
+            self.running = True
+
+    def pause(self):
+        if self.running:
+            self.elapsed += time.time() - self.start_time
+            self.running = False
+            self.start_time = None
+
+    def reset(self):
+        self.running = False
+        self.start_time = None
+        self.elapsed = 0.0
+
+    def get_elapsed(self):
+        if self.running:
+            return self.elapsed + (time.time() - self.start_time)
+        return self.elapsed
+
+    def formatted(self):
+        total = int(self.get_elapsed())
+        hours = total // 3600
+        mins = (total % 3600) // 60
+        secs = total % 60
+        return f"{hours:02}:{mins:02}:{secs:02}"
+
+
+class TimerWidget(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent, bg="#0f1115")
+
+        self.timer = StopwatchTimer()
+        self._ui_loop_running = True
+
+        self.time_label = tk.Label(
+            self,
+            text="00:00:00",
+            font=("Courier New", 36, "bold"),  # monospaced
+            fg="#4caf50",
+            bg="#0f1115",
+            width=8,          # EXACT width for HH:MM:SS
+            anchor="center"   # prevent left clipping
+        )
+
+
+        self.time_label.pack(pady=10, fill="x")
+
+        btns = tk.Frame(self, bg="#0f1115")
+        btns.pack(pady=5)
+
+        self.start_btn = tk.Button(btns, text="▶ Start", command=self.start)
+        self.start_btn.pack(side="left", padx=5)
+
+        self.pause_btn = tk.Button(
+            btns, text="⏸ Pause", command=self.pause, state="disabled"
+        )
+        self.pause_btn.pack(side="left", padx=5)
+
+        self.reset_btn = tk.Button(btns, text="⟲ Reset", command=self.reset)
+        self.reset_btn.pack(side="left", padx=5)
+
+        self.update_ui()
+
+    def start(self):
+        self.timer.start()
+        self.start_btn.config(state="disabled")
+        self.pause_btn.config(state="normal")
+
+    def pause(self):
+        self.timer.pause()
+        self.start_btn.config(state="normal")
+        self.pause_btn.config(state="disabled")
+
+    def reset(self):
+        self.timer.reset()
+        self.time_label.config(text="00:00:00")
+        self.start_btn.config(state="normal")
+        self.pause_btn.config(state="disabled")
+
+
+    def update_ui(self):
+        if not self._ui_loop_running:
+            return
+
+        if self.timer.running:
+            self.time_label.config(text=self.timer.formatted())
+
+        self.after(100, self.update_ui)
+
+    def stop(self):
+        self._ui_loop_running = False
 
 def start_ui():
     root = tk.Tk()
