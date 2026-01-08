@@ -2,6 +2,7 @@ import tkinter as tk
 import time
 
 from tkinter import ttk
+from class_schedule import SCHEDULE, get_current_class
 
 from logic import (
     load_data, toggle_subtask,
@@ -13,6 +14,18 @@ print("### UI.PY VERSION 999 LOADED ###")
 
 
 class FocusDashboard:
+    def update_current_class(self):
+        cls = get_current_class(self.schedule)
+
+        if cls:
+            self.current_class_label.config(
+                text=f"📘 {cls['title']}\n{cls['start']} - {cls['end']}"
+            )
+        else:
+            self.current_class_label.config(text="No class right now")
+
+        self.root.after(60000, self.update_current_class)
+
     def __init__(self, root):
         self.root = root
         self.data = load_data()
@@ -20,10 +33,13 @@ class FocusDashboard:
         self.overlay_alpha = 1.0
 
 
-        from logic import reset_tasks_for_new_day
-        reset_tasks_for_new_day(self.data)
+        from logic import reset_tasks_for_new_day_if_needed
+        reset_tasks_for_new_day_if_needed(self.data)
+
 
         self.view = "today"
+        self.task_widgets = {}
+
 
         root.title("Focus Dashboard")
         # --- Floating focus panel startup ---
@@ -66,6 +82,20 @@ class FocusDashboard:
         self.timer_widget = TimerWidget(self.side_panel)
         self.timer_widget.pack(pady=20)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        self.schedule = SCHEDULE
+
+        self.current_class_label = tk.Label(
+            self.side_panel,
+            text="No class right now",
+            font=("Arial", 14, "bold"),
+            fg="#ff9800",
+            bg="#0f1115"
+        )
+        self.current_class_label.pack(pady=10)
+
+        self.update_current_class()
+
 # ---------- WALLPAPER / CONTENT LAYER ----------
        
        
@@ -107,7 +137,8 @@ class FocusDashboard:
         root.bind("<F6>", lambda e: self.change_opacity(-0.05))
        
         self.root.after(100, self.refresh_tasks)
-  
+        root.bind("<Control-r>", lambda e: self.reload())
+
 
     # ================= HEADER =================
     def build_header(self):
@@ -144,6 +175,12 @@ class FocusDashboard:
                 command=self.root.iconify).pack(side="left")
         tk.Button(right, text="❌", width=3, fg="red",
                 command=self.root.destroy).pack(side="left")
+        tk.Button(
+            right,
+            text="🔄",
+            width=3,
+            command=self.reload
+        ).pack(side="left", padx=4)
 
     def update_stats(self):
         level, xp = get_stats(self.data)
@@ -201,46 +238,58 @@ class FocusDashboard:
         )
 
         self.board_frame.bind("<Configure>", self._update_scroll)
+    def refresh_tasks(self):
+        if self.view == "today":
+            self.render_tasks()
+        else:
+            self.render_history()
+
+        self.update_stats()
+        self._update_scroll()
+
+    def reload(self):
+        """
+        Reload data from disk and refresh the UI.
+        Safe manual refresh.
+        """
+        self.data = load_data()
+        self.refresh_tasks()
 
     # ================= RENDER =================
     def render_tasks(self):
-        for w in self.board_frame.winfo_children():
-            w.destroy()
+        tasks = self.data.get("tasks", [])
 
-        if not self.data.get("tasks"):
-            tk.Label(
-                self.board_frame,
-                text="No tasks yet. Add one above 👆",
-                font=("Arial", 12),
-                fg="gray"
-            ).grid(pady=40)
-            self.board_frame.grid_anchor("center")
-            return
+        task_ids = {task["id"] for task in tasks}
 
-        for i in range(self.board_frame.grid_size()[0]):
-            self.board_frame.grid_columnconfigure(i, weight=0)
-
+        # Remove widgets for deleted tasks
+        for tid in list(self.task_widgets.keys()):
+            if tid not in task_ids:
+                self.task_widgets[tid].destroy()
+                del self.task_widgets[tid]
 
         cols = max(1, self.canvas.winfo_width() // 360)
-
-        for c in range(cols):
-            self.board_frame.grid_columnconfigure(c, weight=1)
-
         row = col = 0
 
-        for ti, task in enumerate(self.data.get("tasks", [])):
-            card = self.render_task(ti, task)
+        for task in tasks:
+            tid = task["id"]
+
+            if tid in self.task_widgets:
+                self.task_widgets[tid].destroy()
+
+            card = self.create_task_card(task)
+            self.task_widgets[tid] = card
+
             card.grid(row=row, column=col, padx=20, pady=20, sticky="n")
-        
 
             col += 1
             if col >= cols:
                 col = 0
                 row += 1
-        self.board_frame.grid_anchor("center")
 
 
-    def render_task(self, ti, task):
+    def create_task_card(self, task):
+        ti = self.data["tasks"].index(task)
+
         # TASK CARD (one self-contained layer)
         frame = tk.Frame(self.board_frame, bd=1, relief="solid", padx=10, pady=8)
 
@@ -348,6 +397,7 @@ class FocusDashboard:
 
         return frame
 
+
     # ================= HISTORY =================
     def render_history(self):
         
@@ -446,26 +496,27 @@ class FocusDashboard:
             if self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack_forget()
     def bind_mouse_wheel(self):
-        self.canvas.bind_all("<Button-4>", lambda e: self.canvas.yview_scroll(-1, "units"))
-        self.canvas.bind_all("<Button-5>", lambda e: self.canvas.yview_scroll(1, "units"))
-    def refresh_tasks(self):
-        for w in self.board_frame.winfo_children():
-            w.destroy()
+        self.canvas.bind("<Enter>", self._bind_scroll)
+        self.canvas.bind("<Leave>", self._unbind_scroll)
 
-        if self.view == "today":
-            self.render_tasks()
-        else:
-            self.render_history()
+    def _bind_scroll(self, event):
+        self.canvas.bind_all("<Button-4>",
+            lambda e: self.canvas.yview_scroll(-1, "units"))
+        self.canvas.bind_all("<Button-5>",
+            lambda e: self.canvas.yview_scroll(1, "units"))
 
-        self.update_stats()
-        self._update_scroll()
-        self.canvas.yview_moveto(0)
-    
+    def _unbind_scroll(self, event):
+        self.canvas.unbind_all("<Button-4>")
+        self.canvas.unbind_all("<Button-5>")
+
 
     def on_close(self):
         self.timer_widget.stop()
         self.root.destroy()
 
+    def commit(self):
+        save_data(self.data)
+        self.refresh_tasks()
 
 
 
@@ -591,6 +642,10 @@ class TimerWidget(tk.Frame):
 
     def stop(self):
         self._ui_loop_running = False
+
+class AppState:
+    def __init__(self):
+        self.data = load_data()
 
 def start_ui():
     root = tk.Tk()

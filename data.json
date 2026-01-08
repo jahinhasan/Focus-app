@@ -1,6 +1,6 @@
 {
     "level": 1,
-    "xp": 26.190476190476183,
+    "xp": 44.44444444444443,
     "streak": 0,
     "last_date": "2026-01-08",
     "tasks": [
@@ -10,32 +10,55 @@
             "subtasks": [
                 {
                     "title": "2 easy problems",
-                    "done": true
+                    "done": true,
+                    "xp_given": true
                 },
                 {
                     "title": "1 medium problem",
-                    "done": true
+                    "done": true,
+                    "xp_given": true
                 }
-            ]
+            ],
+            "id": "f5f19d65-2517-4973-9114-ee8a3e8b3506"
         },
         {
-            "title": "Learn Kotlin",
-            "done": false,
+            "title": "Learn Kotlin kkjj",
+            "done": true,
             "subtasks": [
                 {
-                    "title": "Functions",
-                    "done": false
+                    "title": "Functionsjjj",
+                    "done": true,
+                    "xp_given": true
                 },
                 {
                     "title": "Practice examples",
-                    "done": false
+                    "done": true,
+                    "xp_given": true
                 }
-            ]
+            ],
+            "id": "88214a8c-f87a-4478-b5f6-313e6f9b6281"
         },
         {
             "title": "jahin",
-            "done": false,
-            "subtasks": []
+            "done": true,
+            "subtasks": [
+                {
+                    "title": "jahiiiidddd",
+                    "done": true,
+                    "xp_given": true
+                },
+                {
+                    "title": "jjj",
+                    "done": true,
+                    "xp_given": true
+                },
+                {
+                    "title": "jjjjja",
+                    "done": true,
+                    "xp_given": true
+                }
+            ],
+            "id": "8b02d778-0332-449e-8408-3fe96ae7cf58"
         }
     ],
     "history": {
@@ -50,9 +73,9 @@
             "xp_gained": 4.761904761904762
         },
         "2026-01-08": {
-            "completed": 2,
+            "completed": 9,
             "total": 3,
-            "xp_gained": 4.761904761904762
+            "xp_gained": 23.015873015873016
         }
     }
 }

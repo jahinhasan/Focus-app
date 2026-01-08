@@ -1,7 +1,8 @@
 import json
 import os
+import uuid
 from utils import today, xp_per_task
-
+from datetime import date
 # ---------------- PATH SAFE ----------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data.json")
@@ -9,6 +10,7 @@ DATA_FILE = os.path.join(BASE_DIR, "data.json")
 
 # ---------------- LOAD / SAVE ----------------
 def load_data():
+    
     # If file does not exist, create a safe default
     if not os.path.exists(DATA_FILE):
         data = {
@@ -23,7 +25,21 @@ def load_data():
         return data
 
     with open(DATA_FILE, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    # 🔥 MIGRATION: ensure every task has an ID
+    import uuid
+    changed = False
+
+    for task in data.get("tasks", []):
+        if "id" not in task:
+            task["id"] = str(uuid.uuid4())
+            changed = True
+
+    if changed:
+        save_data(data)
+
+    return data
 
 
 def save_data(data):
@@ -32,15 +48,6 @@ def save_data(data):
 
 
 # ---------------- DAILY RESET ----------------
-def reset_tasks_for_new_day(data):
-    if data.get("last_date", "") != today():
-        for task in data.get("tasks", []):
-            task["done"] = False
-            for sub in task.get("subtasks", []):
-                sub["done"] = False
-
-        data["last_date"] = today()
-        save_data(data)
 
 
 # ---------------- HISTORY ----------------
@@ -56,6 +63,7 @@ def update_history(data, xp_gained):
             "total": len(data.get("tasks", [])),
             "xp_gained": 0
         }
+    
 
     data["history"][date_key]["completed"] += 1
     data["history"][date_key]["xp_gained"] += xp_gained
@@ -80,11 +88,10 @@ def toggle_subtask(data, task_i, sub_i, is_done):
             1, len(task["subtasks"])
         )
 
-        if is_done:
+        if is_done and not sub.get("xp_given", False):
             data["xp"] += xp_gain
+            sub["xp_given"] = True
             update_history(data, xp_gain)
-        else:
-            data["xp"] = max(0, data["xp"] - xp_gain)
 
     recalc_task_done(task)
 
@@ -96,14 +103,18 @@ def toggle_subtask(data, task_i, sub_i, is_done):
 
 
 # ---------------- TASK CRUD ----------------
+
+
 def add_task(data, title):
     if title.strip():
         data.setdefault("tasks", []).append({
+            "id": str(uuid.uuid4()),
             "title": title,
             "done": False,
             "subtasks": []
         })
         save_data(data)
+
 
 
 def edit_task(data, index, new_title):
@@ -122,7 +133,8 @@ def add_subtask(data, task_i, title):
     if title.strip():
         data["tasks"][task_i]["subtasks"].append({
             "title": title,
-            "done": False
+            "done": False,
+            "xp_given": False
         })
         save_data(data)
 
@@ -146,3 +158,17 @@ def get_stats(data):
 def get_history(data):
     return data.get("history", {})
 
+def reset_tasks_for_new_day_if_needed(data):
+    today_str = date.today().isoformat()
+
+    if data.get("last_date") == today_str:
+        return
+
+    for task in data.get("tasks", []):
+        task["done"] = False
+        for sub in task.get("subtasks", []):
+            sub["done"] = False
+            sub["xp_given"] = False
+
+    data["last_date"] = today_str
+    save_data(data)
