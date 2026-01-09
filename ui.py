@@ -4,6 +4,8 @@ import time
 from tkinter import ttk
 from class_schedule import SCHEDULE, get_current_class
 
+
+
 from logic import (
     load_data, toggle_subtask,
     add_task, edit_task, delete_task,
@@ -24,7 +26,9 @@ class FocusDashboard:
         else:
             self.current_class_label.config(text="No class right now")
 
-        self.root.after(60000, self.update_current_class)
+        if self.root.winfo_exists():
+            self._class_after_id = self.root.after(60000, self.update_current_class)
+
 
     def __init__(self, root):
         self.root = root
@@ -54,6 +58,8 @@ class FocusDashboard:
         y = (sh - PANEL_SIZE) // 2
 
         root.geometry(f"{PANEL_SIZE}x{PANEL_SIZE}+{x}+{y}")
+        
+
 
         # ---------- ROOT GRID LAYOUT ----------
         self.root.grid_rowconfigure(1, weight=1)
@@ -78,8 +84,8 @@ class FocusDashboard:
 
         self.clock = BigClock(self.side_panel)
         self.clock.pack(pady=20)
+        self.timer_widget = TimerWidget(self.side_panel, self)
 
-        self.timer_widget = TimerWidget(self.side_panel)
         self.timer_widget.pack(pady=20)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -109,6 +115,8 @@ class FocusDashboard:
 
 
         self.build_header()
+        self.update_stats()   # <-- ADD THIS (CRITICAL)
+
 
         # INPUT LAYER (isolated, centered)
         self.input_layer = tk.Frame(self.center_wrapper)
@@ -127,7 +135,7 @@ class FocusDashboard:
 
         
         root.bind("<Control-n>", lambda e: self.task_entry.focus())
-        root.bind("<Control-h>", lambda e: self.switch_view(
+        root.bind("<Control-Alt-h>", lambda e: self.switch_view(
             "history" if self.view == "today" else "today"
         ))
         self.root.bind_all("<F9>", self.toggle_overlay)
@@ -138,25 +146,25 @@ class FocusDashboard:
        
         self.root.after(100, self.refresh_tasks)
         root.bind("<Control-r>", lambda e: self.reload())
+        root.bind("<Control-f>", lambda e: self.switch_view("focus"))
 
 
     # ================= HEADER =================
     def build_header(self):
-        # 3-column header layout
         self.top_bar.grid_columnconfigure(0, weight=0)
         self.top_bar.grid_columnconfigure(1, weight=1)
         self.top_bar.grid_columnconfigure(2, weight=0)
 
-        # LEFT: TODAY
+        # LEFT
         left = tk.Frame(self.top_bar)
         left.grid(row=0, column=0, sticky="w", padx=12)
 
         tk.Label(
             left, text="🎯 TODAY",
             font=("Arial", 14, "bold")
-        ).pack()
+        ).grid()
 
-        # CENTER: LEVEL + XP
+        # CENTER
         center = tk.Frame(self.top_bar)
         center.grid(row=0, column=1)
 
@@ -166,26 +174,32 @@ class FocusDashboard:
         self.xp_bar = ttk.Progressbar(center, length=360, maximum=100)
         self.xp_bar.pack(pady=2)
 
-        # RIGHT: window buttons
+        # RIGHT
         right = tk.Frame(self.top_bar)
         right.grid(row=0, column=2, sticky="e", padx=12)
 
-        
         tk.Button(right, text="—", width=3,
                 command=self.root.iconify).pack(side="left")
+
         tk.Button(right, text="❌", width=3, fg="red",
                 command=self.root.destroy).pack(side="left")
+
+        # 🔁 TOGGLE BUTTON (Graph / Today)
+        self.toggle_view_btn = tk.Button(
+            right,
+            text="📊",
+            width=3,
+            command=self.toggle_focus_today
+        )
+        self.toggle_view_btn.pack(side="left", padx=4)
+
+        # 🕘 HISTORY BUTTON (ALWAYS)
         tk.Button(
             right,
-            text="🔄",
+            text="🕘",
             width=3,
-            command=self.reload
+            command=lambda: self.switch_view("history")
         ).pack(side="left", padx=4)
-
-    def update_stats(self):
-        level, xp = get_stats(self.data)
-        self.level_label.config(text=f"⭐ LEVEL {level}")
-        self.xp_bar["value"] = xp
 
     # ================= ADD TASK =================
     def build_task_input(self):
@@ -241,43 +255,47 @@ class FocusDashboard:
     def refresh_tasks(self):
         if self.view == "today":
             self.render_tasks()
-        else:
+        elif self.view == "history":
             self.render_history()
+        elif self.view == "focus":
+            self.render_focus_overview()
 
         self.update_stats()
         self._update_scroll()
 
     def reload(self):
         """
-        Reload data from disk and refresh the UI.
         Safe manual refresh.
+        Reloads data but keeps current view.
         """
+        current_view = self.view
+
         self.data = load_data()
-        self.refresh_tasks()
+
+        self.clear_board()
+        self.view = current_view
+
+        if current_view == "today":
+            self.render_tasks()
+        elif current_view == "history":
+            self.render_history()
+        elif current_view == "focus":
+            self.render_focus_overview()
+
+        self.update_stats()
+
 
     # ================= RENDER =================
     def render_tasks(self):
+        self.clear_board()
+
         tasks = self.data.get("tasks", [])
-
-        task_ids = {task["id"] for task in tasks}
-
-        # Remove widgets for deleted tasks
-        for tid in list(self.task_widgets.keys()):
-            if tid not in task_ids:
-                self.task_widgets[tid].destroy()
-                del self.task_widgets[tid]
-
         cols = max(1, self.canvas.winfo_width() // 360)
         row = col = 0
 
-        for task in tasks:
-            tid = task["id"]
-
-            if tid in self.task_widgets:
-                self.task_widgets[tid].destroy()
-
-            card = self.create_task_card(task)
-            self.task_widgets[tid] = card
+        for i, task in enumerate(tasks):
+            card = self.create_task_card(task, i)
+            self.task_widgets[task["id"]] = card
 
             card.grid(row=row, column=col, padx=20, pady=20, sticky="n")
 
@@ -287,8 +305,11 @@ class FocusDashboard:
                 row += 1
 
 
-    def create_task_card(self, task):
-        ti = self.data["tasks"].index(task)
+
+
+    def create_task_card(self, task, ti):
+
+        
 
         # TASK CARD (one self-contained layer)
         frame = tk.Frame(self.board_frame, bd=1, relief="solid", padx=10, pady=8)
@@ -398,46 +419,144 @@ class FocusDashboard:
         return frame
 
 
-    # ================= HISTORY =================
+        # ================= HISTORY =================
     def render_history(self):
-        
-        for w in self.board_frame.winfo_children():
-            w.destroy()
-        
-        
+        self.clear_board()
+
         history = self.data.get("history", {})
 
         if not history:
-            tk.Label(self.board_frame, text="No history yet").grid(pady=20)
+            tk.Label(
+                self.board_frame,
+                text="No history yet",
+                font=("Arial", 14)
+            ).pack(pady=20)
             return
 
-        row = 0
         for day, info in sorted(history.items(), reverse=True):
             box = tk.Frame(self.board_frame, bd=1, relief="solid", padx=10, pady=8)
-            box.grid(row=row, column=0, padx=20, pady=10, sticky="n")
+            box.pack(padx=20, pady=10)
 
-            tk.Label(box, text=f"📅 {day}",
-                    font=("Arial", 11, "bold")).pack(anchor="w")
-            tk.Label(box,
-                    text=f"✔ {info['completed']} / {info['total']}").pack(anchor="w", padx=10)
-            tk.Label(box,
-                    text=f"⭐ XP gained: {info['xp_gained']:.1f}").pack(anchor="w", padx=10)
+            tk.Label(
+                box, text=f"📅 {day}",
+                font=("Arial", 11, "bold")
+            ).pack(anchor="w")
 
-            row += 1
+            tk.Label(
+                box,
+                text=f"🧾 Tasks completed: {info['completed']} / {info['total']}"
+            ).pack(anchor="w", padx=10)
 
-        self.board_frame.grid_anchor("center")
+            tk.Label(
+                box,
+                text=f"⭐ XP gained: {int(info['xp_gained'])}"
+            ).pack(anchor="w", padx=10)
+
+
+    def render_focus_overview(self):
+        self.clear_board()
+
+        data = self.data.get("focus_sessions", {})
+
+        # ✅ No valid data guard
+        valid_days = [
+            d for d, v in data.items()
+            if v.get("total_seconds", 0) >= 60
+        ]
+
+        if not valid_days:
+            tk.Label(
+                self.board_frame,
+                text="📊 No focus data yet",
+                font=("Arial", 14)
+            ).pack(pady=40)
+            return
+
+        days = sorted(valid_days)[-7:]
+
+        canvas = tk.Canvas(
+            self.board_frame,
+            width=600,
+            height=300,
+            bg="white",
+            highlightthickness=0
+        )
+        canvas.pack(pady=20)
+
+        max_minutes = max(
+            data[d]["total_seconds"] // 60 for d in days
+        )
+
+        bar_width = 40
+        gap = 30
+        base_y = 250
+
+        for i, day in enumerate(days):
+            minutes = data[day]["total_seconds"] // 60
+            height = int((minutes / max_minutes) * 180)
+
+            x = 50 + i * (bar_width + gap)
+
+            canvas.create_rectangle(
+                x, base_y - height,
+                x + bar_width, base_y,
+                fill="#4caf50"
+            )
+
+            canvas.create_text(
+                x + bar_width // 2,
+                base_y - height - 10,
+                text=f"{minutes}m",
+                font=("Arial", 9)
+            )
+
+            canvas.create_text(
+                x + bar_width // 2,
+                base_y + 12,
+                text=day[5:],
+                font=("Arial", 9)
+            )
+
+        total_minutes = sum(
+            data[d]["total_seconds"] for d in days
+        ) // 60
+
+        total_sessions = sum(
+            data[d]["sessions"] for d in days
+        )
+
+        tk.Label(
+            self.board_frame,
+            text=f"🧠 Total Focus: {total_minutes} minutes",
+            font=("Arial", 13, "bold")
+        ).pack()
+
+        tk.Label(
+            self.board_frame,
+            text=f"🔁 Sessions: {total_sessions}",
+            font=("Arial", 11)
+        ).pack()
 
     # ================= UTIL =================
-    
     def switch_view(self, view):
+        self.clear_board()
         self.view = view
 
-        if self.view == "today":
+        if view == "today":
             self.render_tasks()
-        else:
+            self.toggle_view_btn.config(text="📊")
+
+        elif view == "history":
             self.render_history()
+            self.toggle_view_btn.config(text="📊")
+
+        elif view == "focus":
+            self.render_focus_overview()
+            self.toggle_view_btn.config(text="📋")
 
         self.update_stats()
+
+
 
 
   
@@ -467,6 +586,8 @@ class FocusDashboard:
             y = (sh - size) // 2
 
             self.root.geometry(f"{size}x{size}+{x}+{y}")
+            self.center_wrapper.place_configure(relx=0.5)
+
 
         else:
             # Normal mode
@@ -481,11 +602,16 @@ class FocusDashboard:
             y = (sh - size) // 2
 
             self.root.geometry(f"{size}x{size}+{x}+{y}")
+            self.center_wrapper.place_configure(relx=0.5)
+
 
 
 
     def _update_scroll(self, event=None):
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        bbox = self.canvas.bbox("all")
+        if bbox:
+            self.canvas.configure(scrollregion=bbox)
+
 
         needs_scroll = self.board_frame.winfo_reqheight() > self.canvas.winfo_height()
 
@@ -504,6 +630,9 @@ class FocusDashboard:
             lambda e: self.canvas.yview_scroll(-1, "units"))
         self.canvas.bind_all("<Button-5>",
             lambda e: self.canvas.yview_scroll(1, "units"))
+        self.canvas.bind_all("<MouseWheel>",
+            lambda e: self.canvas.yview_scroll(-1*(e.delta//120), "units"))
+
 
     def _unbind_scroll(self, event):
         self.canvas.unbind_all("<Button-4>")
@@ -511,13 +640,40 @@ class FocusDashboard:
 
 
     def on_close(self):
-        self.timer_widget.stop()
+        
+        if hasattr(self, "_class_after_id"):
+            self.root.after_cancel(self._class_after_id)
         self.root.destroy()
 
-    def commit(self):
-        save_data(self.data)
-        self.refresh_tasks()
+       
+    def clear_board(self):
+        # Clear everything inside board
+        for w in self.board_frame.winfo_children():
+            w.destroy()
 
+        # Clear task widgets cache
+        for w in self.task_widgets.values():
+            w.destroy()
+        self.task_widgets.clear()
+
+        # Reset scroll
+        self.canvas.yview_moveto(0)
+
+    def toggle_focus_today(self):
+        if self.view == "focus":
+            self.switch_view("today")
+        else:
+            self.switch_view("focus")
+
+    def update_stats(self):
+        if not hasattr(self, "level_label") or not hasattr(self, "xp_bar"):
+            return
+
+        level, xp = get_stats(self.data)
+
+        self.level_label.config(text=f"⭐ LEVEL {level}")
+        self.xp_bar["value"] = max(0, min(100, xp))
+        
 
 
 class BigClock(tk.Frame):
@@ -577,13 +733,39 @@ class StopwatchTimer:
         secs = total % 60
         return f"{hours:02}:{mins:02}:{secs:02}"
 
+class FocusSessionTracker:
+    def __init__(self):
+        self.active = False
+        self.start_time = None
+        
+
+    def start(self):
+        if not self.active:
+            self.start_time = time.time()
+            self.active = True
+
+    def stop(self):
+        if not self.active:
+            return 0
+
+        duration = time.time() - self.start_time
+        self.active = False
+        self.start_time = None
+        return duration
+    
+        
 
 class TimerWidget(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, app):
         super().__init__(parent, bg="#0f1115")
+        self.app = app
+
+        
 
         self.timer = StopwatchTimer()
         self._ui_loop_running = True
+        self.session = FocusSessionTracker()
+        self.bind("<Destroy>", self._on_destroy)
 
         self.time_label = tk.Label(
             self,
@@ -597,6 +779,15 @@ class TimerWidget(tk.Frame):
 
 
         self.time_label.pack(pady=10, fill="x")
+        self.feedback_label = tk.Label(
+            self,
+            text="",
+            font=("Arial", 11),
+            fg="#9e9e9e",
+            bg="#0f1115"
+        )
+        self.feedback_label.pack(pady=(4, 0))
+
 
         btns = tk.Frame(self, bg="#0f1115")
         btns.pack(pady=5)
@@ -615,33 +806,74 @@ class TimerWidget(tk.Frame):
         self.update_ui()
 
     def start(self):
+        self.feedback_label.config(text="")
         self.timer.start()
+        self.session.start()
+
         self.start_btn.config(state="disabled")
         self.pause_btn.config(state="normal")
 
     def pause(self):
         self.timer.pause()
+        seconds = self.session.stop()
+        if seconds > 0:
+            from logic import log_focus_session
+
+            minutes = int(seconds // 60)
+            xp = int(seconds // 300)
+
+            log_focus_session(self.app.data, seconds)
+            self.app.update_stats()
+
+            self.feedback_label.config(
+                text=f"⏱ Focused {minutes} min • +{xp} XP"
+            )
+
+
         self.start_btn.config(state="normal")
         self.pause_btn.config(state="disabled")
 
+
     def reset(self):
         self.timer.reset()
+        seconds = self.session.stop()
+
+        if seconds > 0:
+            from logic import log_focus_session
+
+            minutes = int(seconds // 60)
+            xp = int(seconds // 300)
+
+            log_focus_session(self.app.data, seconds)
+            self.app.update_stats()
+
+            self.feedback_label.config(
+                text=f"⏱ Focused {minutes} min • +{xp} XP"
+            )
+
         self.time_label.config(text="00:00:00")
         self.start_btn.config(state="normal")
         self.pause_btn.config(state="disabled")
 
 
+
     def update_ui(self):
-        if not self._ui_loop_running:
+        if not self.winfo_exists():
             return
 
         if self.timer.running:
             self.time_label.config(text=self.timer.formatted())
 
-        self.after(100, self.update_ui)
+        self.after(200, self.update_ui)
+
 
     def stop(self):
-        self._ui_loop_running = False
+        pass
+        
+    def _on_destroy(self, event):
+        pass
+
+    
 
 class AppState:
     def __init__(self):

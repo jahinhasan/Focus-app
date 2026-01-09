@@ -1,12 +1,12 @@
 {
     "level": 1,
-    "xp": 44.44444444444443,
+    "xp": 46,
     "streak": 0,
-    "last_date": "2026-01-08",
+    "last_date": "2026-01-09",
     "tasks": [
         {
             "title": "Solve DSA",
-            "done": true,
+            "done": false,
             "subtasks": [
                 {
                     "title": "2 easy problems",
@@ -15,47 +15,47 @@
                 },
                 {
                     "title": "1 medium problem",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 }
             ],
             "id": "f5f19d65-2517-4973-9114-ee8a3e8b3506"
         },
         {
             "title": "Learn Kotlin kkjj",
-            "done": true,
+            "done": false,
             "subtasks": [
                 {
                     "title": "Functionsjjj",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 },
                 {
                     "title": "Practice examples",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 }
             ],
             "id": "88214a8c-f87a-4478-b5f6-313e6f9b6281"
         },
         {
             "title": "jahin",
-            "done": true,
+            "done": false,
             "subtasks": [
                 {
                     "title": "jahiiiidddd",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 },
                 {
                     "title": "jjj",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 },
                 {
                     "title": "jjjjja",
-                    "done": true,
-                    "xp_given": true
+                    "done": false,
+                    "xp_given": false
                 }
             ],
             "id": "8b02d778-0332-449e-8408-3fe96ae7cf58"
@@ -76,6 +76,25 @@
             "completed": 9,
             "total": 3,
             "xp_gained": 23.015873015873016
+        },
+        "2026-01-09": {
+            "completed": 0,
+            "total": 3,
+            "xp_gained": 0
+        }
+    },
+    "focus_sessions": {
+        "2026-01-07": {
+            "total_seconds": 1800,
+            "sessions": 2
+        },
+        "2026-01-08": {
+            "total_seconds": 2400,
+            "sessions": 3
+        },
+        "2026-01-09": {
+            "total_seconds": 900,
+            "sessions": 1
         }
     }
 }
