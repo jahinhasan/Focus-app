@@ -1,11 +1,13 @@
-# -*- mode: python ; coding: utf-8 -*-
+import os
+import customtkinter
 
+ctk_path = os.path.dirname(customtkinter.__file__)
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('/home/jahinhasan/jahin/projects/focus_dashboard/.venv/lib/python3.12/site-packages/customtkinter', 'customtkinter')],
+    datas=[(ctk_path, 'customtkinter')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

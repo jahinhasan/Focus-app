@@ -31,14 +31,7 @@ jobs:
     - name: Build with PyInstaller
       shell: bash
       run: |
-        # Get path to customtkinter for the --add-data flag
-        CTK_PATH=$(python -c "import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))")
-        
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          pyinstaller --onefile --windowed --name FocusApp --add-data "$CTK_PATH;customtkinter" main.py
-        else
-          pyinstaller --onefile --windowed --name FocusApp --add-data "$CTK_PATH:customtkinter" main.py
-        fi
+        pyinstaller FocusApp.spec
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
