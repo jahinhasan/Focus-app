@@ -372,9 +372,18 @@ class TodayView(ctk.CTkScrollableFrame):
 
         # Edit button
         ctk.CTkButton(top_row, text="✎", width=26, height=26, font=FONTS["small"],
-                      text_color=COLORS["text_dim"], fg_color="transparent", 
+                      text_color=COLORS["text_dim"], fg_color="transparent",
                       hover_color=COLORS["accent"], corner_radius=5,
-                      command=lambda: self.prompt_edit_task(task)).pack(side="right", padx=2)
+                      command=lambda t=task: self.edit_task(t)).pack(side="right", padx=2)
+        
+        # Magic Subtask button (Only for non-classes)
+        if not is_class:
+            magic_btn = ctk.CTkButton(top_row, text="✨", width=26, height=26, font=FONTS["small"],
+                          text_color=COLORS["warning"], fg_color="transparent",
+                          hover_color=COLORS["card_hover"], corner_radius=5,
+                          command=lambda t=task, b=card: self.generate_ai_subtasks(t, b))
+            magic_btn.pack(side="right", padx=2)
+            Tooltip(magic_btn, "Auto-generate subtasks with AI")
 
         # Time badge for classes
         if is_class:
@@ -506,9 +515,9 @@ class TodayView(ctk.CTkScrollableFrame):
 
         ctk.CTkLabel(top, text="Select Date:", font=FONTS["body"]).pack(pady=(10, 0))
         cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd',
-                       background=COLORS["card"], foreground="white",
-                       headersbackground=COLORS["sidebar"], normalbackground=COLORS["card"],
-                       selectbackground=COLORS["accent"])
+                       background=get_color_str("card"), foreground="white",
+                       headersbackground=get_color_str("sidebar"), normalbackground=get_color_str("card"),
+                       selectbackground=get_color_str("accent"))
         cal.pack(pady=10)
 
         ctk.CTkLabel(top, text="Time Limit (minutes, optional):", font=FONTS["body"]).pack(pady=(5, 0))
@@ -704,6 +713,33 @@ class TodayView(ctk.CTkScrollableFrame):
             # Production hack: Just pack it. The user sees the note.
             note_lbl.pack(anchor="w", padx=10, pady=(8, 4))
             card._note_lbl = note_lbl
+
+    def generate_ai_subtasks(self, task, card):
+        """Ask AI to generate subtasks for this task."""
+        from ai_parser import suggest_subtasks_ai
+        from logic import add_subtask
+        
+        # UI Feedback
+        self.app.refresh_xp() 
+        
+        def run_ai():
+            subtasks = suggest_subtasks_ai(task["title"])
+            if subtasks:
+                for st in subtasks:
+                    add_subtask(self.app.data, task["id"], st)
+                
+                # Full refresh for now to update details
+                self.after(0, lambda: self.render())
+            else:
+                self.after(0, lambda: messagebox.showwarning("AI Error", "Could not generate subtasks. Try again!"))
+
+        import threading
+        threading.Thread(target=run_ai, daemon=True).start()
+
+    def edit_task(self, task):
+        # We can implement a full edit dialog later
+        pass
+
 
 class ModernFileSelector(ctk.CTkToplevel):
     """A premium, card-based gallery selector for an ultra-modern experience."""
@@ -1734,7 +1770,7 @@ class ReportView(ctk.CTkFrame):
         canvas.pack(fill="x", padx=20, pady=(0, 20))
         
         if not daily_focus:
-            canvas.create_text(200, 100, text="No data yet", fill=COLORS["text_dim"], font=("Inter", 12))
+            canvas.create_text(200, 100, text="No data yet", fill=get_color_str("text_dim"), font=("Inter", 12))
             return
 
         dates = sorted(daily_focus.keys())
@@ -1806,6 +1842,142 @@ class ReportView(ctk.CTkFrame):
             
             ctk.CTkLabel(row, text=f"{int(percent*100)}%", width=40, 
                          font=FONTS["small"], text_color=COLORS["text_dim"]).pack(side="right")
+
+class ChatView(ctk.CTkFrame):
+    def __init__(self, parent, app):
+        super().__init__(parent, fg_color=COLORS["bg"])
+        self.app = app
+        self.history = [] # [{'role': 'user'|'assistant', 'content': '...'}]
+        self.render()
+
+    def render(self):
+        for w in self.winfo_children(): w.destroy()
+        
+        # Header
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(10, 10))
+        ctk.CTkLabel(header, text="🤖 AI Assistant", font=FONTS["title"]).pack(side="left")
+        
+        # Chat area
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color=COLORS["sidebar"], corner_radius=15)
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Input area
+        input_frame = ctk.CTkFrame(self, fg_color=COLORS["card"], height=60, corner_radius=20)
+        input_frame.pack(fill="x", padx=20, pady=(10, 20))
+        
+        self.entry = ctk.CTkEntry(input_frame, placeholder_text="Ask anything... (e.g. 'Add math homework for tomorrow')", 
+                                  font=FONTS["body"], fg_color="transparent", border_width=0)
+        self.entry.pack(side="left", fill="both", expand=True, padx=(20, 10), pady=10)
+        self.entry.bind("<Return>", lambda e: self.send_message())
+        
+        ctk.CTkButton(input_frame, text="📎", width=40, height=36, corner_radius=15,
+                      fg_color="transparent", text_color=COLORS["accent"], 
+                      hover_color=COLORS["card_hover"], command=self.upload_image).pack(side="left", padx=5)
+        
+        ctk.CTkButton(input_frame, text="Send 🚀", width=80, height=36, corner_radius=15,
+                      fg_color=COLORS["accent"], command=self.send_message).pack(side="right", padx=10)
+        
+        # Welcome message
+        if not self.history:
+            self.add_message("assistant", "Hello! I'm your Focus Assistant. I can help you manage tasks, analyze documents, or just keep you motivated. Try asking 'What's my schedule today?'")
+
+    def send_message(self):
+        msg = self.entry.get().strip()
+        if not msg: return
+        
+        self.entry.delete(0, "end")
+        self.add_message("user", msg)
+        
+        # Call AI
+        from ai_parser import chat_with_ai
+        
+        # Spinner/Thinking placeholder
+        thinking_lbl = self.add_message("assistant", "Thinking... 🧠", is_temporary=True)
+        self.update()
+        
+        result = chat_with_ai(msg, history=self.history[:-1]) # exclude the user message we just added
+        
+        thinking_lbl.destroy() # remove thinking
+        
+        if result:
+            response = result.get("message", "I'm not sure how to respond to that.")
+            self.add_message("assistant", response)
+            
+            # Handle intents (task, class, etc)
+            self._handle_intent(result)
+        else:
+            self.add_message("assistant", "⚠️ I'm having trouble connecting to the AI. Please check your internet or try again in a moment.")
+
+    def upload_image(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")])
+        if file_path:
+            self.add_message("user", f"Uploaded image: {os.path.basename(file_path)}")
+            
+            # Use parse_file_with_ai for images
+            from ai_parser import parse_file_with_ai
+            
+            thinking_lbl = self.add_message("assistant", "Analyzing image... 🖼️", is_temporary=True)
+            self.update()
+            
+            result = parse_file_with_ai(file_path)
+            thinking_lbl.destroy()
+            
+            if result:
+                msg = result.get("message", "I've analyzed the image.")
+                if result.get("intent") == "schedule_file":
+                    msg = f"✅ I found {len(result.get('classes', []))} classes in that image! I've added them to your routine."
+                    self.app.views["routine"].render()
+                
+                self.add_message("assistant", msg)
+                self._handle_intent(result)
+            else:
+                self.add_message("assistant", "I couldn't read information from that image. Make sure it's clear!")
+
+    def add_message(self, role, content, is_temporary=False):
+        bubble_frame = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        bubble_frame.pack(fill="x", pady=5)
+        
+        align = "right" if role == "user" else "left"
+        bg_col = COLORS["accent"] if role == "user" else COLORS["card"]
+        text_col = "white" if role == "user" else COLORS["text"]
+        
+        bubble = ctk.CTkFrame(bubble_frame, fg_color=bg_col, corner_radius=15)
+        bubble.pack(side=align, padx=10, pady=2)
+        
+        msg_lbl = ctk.CTkLabel(bubble, text=content, font=FONTS["body"], text_color=text_col, 
+                               wraplength=500, justify="left")
+        msg_lbl.pack(padx=15, pady=8)
+        
+        if not is_temporary:
+            self.history.append({"role": role, "content": content})
+            
+        # Scroll to bottom
+        self.scroll._parent_canvas.yview_moveto(1.0)
+        return bubble_frame
+
+    def _handle_intent(self, result):
+        intent = result.get("intent")
+        if intent == "task":
+            from logic import add_task_logic
+            add_task_logic(self.app.data, result.get("title", "New Task"), 
+                           deadline=result.get("date"), duration=result.get("duration"))
+            self.app.views["today"].render() # refresh today
+            
+        elif intent == "class":
+            from logic import add_task_logic
+            sch = {"days": result.get("days", []), "start": result.get("start"), "end": result.get("end")}
+            add_task_logic(self.app.data, result.get("title", "New Class"), category="class", 
+                           days=result.get("days"), schedule=sch, subject=result.get("title"))
+            self.app.views["routine"].render()
+            
+        elif intent == "query":
+            # These are already handled by the AI message usually, 
+            # but we could trigger UI navigation too.
+            action = result.get("action")
+            if action == "stats": self.app.switch_view("report")
+            elif action == "weekly_classes": self.app.switch_view("routine")
+            elif action == "today_tasks": self.app.switch_view("today")
 
 class HabitView(ctk.CTkFrame):
     def __init__(self, parent, app):
@@ -2010,6 +2182,9 @@ class VaultView(ctk.CTkFrame):
 
         ctk.CTkButton(f_item, text="Open", width=60, height=20, font=FONTS["small"],
                       fg_color=COLORS["success_dark"], command=lambda p=f_path: self.open_file(p)).pack(side="right")
+        
+        ctk.CTkButton(f_item, text="Summ", width=60, height=20, font=FONTS["small"],
+                      fg_color=COLORS["accent_dark"], command=lambda p=f_path: self.show_summary(p)).pack(side="right", padx=5)
 
     def prompt_new_subject(self):
         name = tk.simpledialog.askstring("New Subject", "Enter subject name:")
@@ -2064,6 +2239,34 @@ class VaultView(ctk.CTkFrame):
 
         except Exception as e:
             messagebox.showerror("Error", f"Could not open file: {e}")
+
+    def show_summary(self, path):
+        """Show AI-generated summary in a popup."""
+        top = ctk.CTkToplevel(self)
+        top.title(f"Summary: {os.path.basename(path)}")
+        top.geometry("600x500")
+        top.attributes("-topmost", True)
+        
+        lbl = ctk.CTkLabel(top, text="🔄 Generating summary with Gemini...", font=FONTS["body"])
+        lbl.pack(pady=20)
+        
+        txt = ctk.CTkTextbox(top, font=FONTS["body"], wrap="word")
+        txt.pack(fill="both", expand=True, padx=20, pady=10)
+        txt.insert("1.0", "Please wait while I read the document...")
+        txt.configure(state="disabled")
+        
+        def run_summ():
+            from ai_parser import summarize_with_ai
+            summary = summarize_with_ai(path)
+            txt.configure(state="normal")
+            txt.delete("1.0", "end")
+            txt.insert("1.0", summary)
+            txt.configure(state="disabled")
+            lbl.configure(text="✨ Summary Generated")
+
+        # Run in a separate thread to avoid freezing UI
+        import threading
+        threading.Thread(target=run_summ, daemon=True).start()
 
 
 # ==================== MAIN APP ====================
@@ -2129,11 +2332,6 @@ class FocusApp(ctk.CTk):
     def setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts for navigation and actions."""
         # View navigation (1-6 keys)
-        self.bind("<Key-1>", lambda e: self.switch_view("today"))
-        self.bind("<Key-2>", lambda e: self.switch_view("routine"))
-        self.bind("<Key-3>", lambda e: self.switch_view("vault"))
-        self.bind("<Key-4>", lambda e: self.switch_view("history"))
-        self.bind("<Key-5>", lambda e: self.switch_view("report"))
         
         # Quick actions
         self.bind("<Control-n>", lambda e: self.quick_add_task())
@@ -2252,6 +2450,7 @@ class FocusApp(ctk.CTk):
             ("📂 Vault", "vault"),
             ("📜 History", "history"),
             ("📊 Report", "report"),
+            ("🤖 Assistant", "assistant"),
             ("🛒 Store", "store"),
             ("⚙️ Settings", "settings")
         ]
@@ -2279,6 +2478,7 @@ class FocusApp(ctk.CTk):
             "vault": VaultView,
             "history": HistoryView,
             "report": ReportView,
+            "assistant": ChatView,
             "settings": SettingsView,
             "store": StoreView
         }

@@ -110,7 +110,9 @@ class SmartParser:
         # Gemini client (Primary - V9.0 Flash)
         gemini_key = os.environ.get("GEMINI_API_KEY")
         if genai and gemini_key:
-            try: self.gemini_client = genai.Client(api_key=gemini_key)
+            try: 
+                self.gemini_client = genai.Client(api_key=gemini_key)
+                self.chat_session = None # Lazy init
             except: self.gemini_client = None
         else:
             self.gemini_client = None
@@ -160,20 +162,28 @@ class SmartParser:
 - Use markdown formatting for better readability
 
 ## Output Format:
-Always respond with JSON:
-{{"intent": "chat"|"task"|"class"|"schedule_file"|"query", "message": "Your response", ...other_details}}
+Always respond with JSON. The structure depends on the intent:
+
+1. **Chat / Questions**:
+   {{"intent": "chat"|"query", "message": "Your response", "action": "optional_action_id"}}
+
+2. **Add Task**:
+   {{"intent": "task", "message": "Added task: [Title]", "title": "Task Title", "date": "YYYY-MM-DD" (optional), "duration": 30 (int, minutes, optional)}}
+
+3. **Add Class**:
+   {{"intent": "class", "message": "Added class: [Name]", "title": "Class Name", "days": ["mon", "wed"], "start": "09:00", "end": "10:30"}}
 
 **IMPORTANT - Intent Classification Rules:**
 1. **Questions** → intent = "query" (never "task"!)
-   - "How much XP do I have?" → {{"intent": "query", "action": "xp"}}
-   - "When is my next class?" → {{"intent": "query", "action": "next_class"}}
+   - "How much XP do I have?" → {{"intent": "query", "action": "xp", "message": "..."}}
+   - "When is my next class?" → {{"intent": "query", "action": "next_class", "message": "..."}}
    - "What do I have today?" → {{"intent": "query", "action": "today_tasks"}}
    - "What classes this week?" → {{"intent": "query", "action": "weekly_classes"}}
    - "Show my stats" → {{"intent": "query", "action": "stats"}}
 
 2. **Commands to ADD something** → intent = "task" or "class"
-   - "Add math homework" → {{"intent": "task", ...}}
-   - "Physics class Mon Wed 10-11" → {{"intent": "class", ...}}
+   - "Add math homework" → {{"intent": "task", "title": "Math Homework", "message": "..."}}
+   - "Physics class Mon Wed 10-11" → {{"intent": "class", "title": "Physics", "days": ["mon", "wed"], "start": "10:00", "end": "11:00", "message": "..."}}
 
 3. **Greetings/Casual** → intent = "chat"
    - "Hello", "Hi", "Thanks"
@@ -228,6 +238,100 @@ For query intent, use this action mapping:
         except Exception as e:
             print(f"AI Error: {e}")
             return None
+
+    def _call_gemini_chat(self, text: str, history=None) -> dict:
+        """Call Gemini for conversational/multimodal interaction with retry logic."""
+        if not self.gemini_client:
+            return None
+            
+        import time
+        retries = 3
+        
+        # Prepare configuration with JSON response
+        config = {
+            'response_mime_type': 'application/json',
+            'system_instruction': self._get_enhanced_system_prompt()
+        }
+        
+        for attempt in range(retries):
+            try:
+                # Use single-turn or multi-turn
+                if history:
+                    # Format history for genai SDK
+                    contents = []
+                    for msg in history:
+                        contents.append({
+                            'role': 'user' if msg['role'] == 'user' else 'model',
+                            'parts': [{'text': msg['content']}]
+                        })
+                    contents.append({'role': 'user', 'parts': [{'text': text}]})
+                    
+                    response = self.gemini_client.models.generate_content(
+                        model='gemini-flash-latest',
+                        contents=contents,
+                        config=config
+                    )
+                else:
+                    response = self.gemini_client.models.generate_content(
+                        model='gemini-flash-latest',
+                        contents=text,
+                        config=config
+                    )
+                    
+                return json.loads(response.text)
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "503" in err_str:
+                    if attempt < retries - 1:
+                        time.sleep(2 ** attempt) # Exponential backoff
+                        continue
+                print(f"Gemini Chat Error (Attempt {attempt+1}): {e}")
+                
+        return None
+
+    def summarize_document(self, file_path: str) -> str:
+        """Summarize a document using Gemini."""
+        if not self.gemini_client: return "Gemini API not available."
+        
+        try:
+            # Upload file if large, or read directly if text/small
+            with open(file_path, "rb") as f:
+                content = f.read()
+            
+            # prompt
+            prompt = "You are an expert academic summarizer. Provide a concise but comprehensive summary of this document. Use bullet points for key takeaways. Format with Markdown."
+            
+            # Detect file type
+            ext = file_path.lower().split('.')[-1]
+            mime_type = "application/pdf" if ext == "pdf" else "text/plain"
+            
+            response = self.gemini_client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=[
+                    {'mime_type': mime_type, 'data': content},
+                    prompt
+                ]
+            )
+            return response.text
+        except Exception as e:
+            return f"Error summarizing document: {str(e)}"
+
+    def generate_subtasks(self, task_title: str) -> list:
+        """Break down a task into 3-5 subtasks."""
+        if not self.gemini_client: return []
+        
+        try:
+            prompt = f"Break down this task into 3-5 actionable subtasks: '{task_title}'. Output JSON: {{'subtasks': ['subtask 1', 'subtask 2', ...]}}"
+            response = self.gemini_client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=prompt,
+                config={'response_mime_type': 'application/json'}
+            )
+            data = json.loads(response.text)
+            return data.get("subtasks", [])
+        except Exception as e:
+            print(f"Subtask Generation Error: {e}")
+            return []
 
     def parse_file(self, file_path: str) -> dict:
         """Parse a file using the best available engine (Gemini Flash -> Groq Fallback)."""
@@ -403,14 +507,21 @@ For query intent, use this action mapping:
                 pass
             return task_match
 
-        # 2. Use AI for complex/natural input
+        # 2. Use AI for complex/natural input (Gemini Primary, Groq Fallback)
+        if self.gemini_client:
+            ai_result = self._call_gemini_chat(text)
+            if ai_result:
+                try: record_query(ai_result.get("intent", "chat"), {"message": ai_result.get("message")})
+                except: pass
+                return ai_result
+                
         if self.client:
             ai_result = self._call_groq(text)
             if ai_result:
                 # Learning hook: record generic chat intent
                 try:
                     record_query(ai_result.get("intent", "chat"), {"message": ai_result.get("message")})
-                except Exception:
+                except:
                     pass
                 return ai_result
 
@@ -738,3 +849,18 @@ def parse_file_with_ai(file_path: str) -> dict:
         raw.setdefault("confidence", raw.get("confidence", 0.9))
         raw.setdefault("source", raw.get("source", "ai" if Groq else "local"))
     return raw
+
+def chat_with_ai(text: str, history: list = None) -> dict:
+    """Conversational AI entry point."""
+    parser = SmartParser()
+    return parser._call_gemini_chat(text, history=history)
+
+def summarize_with_ai(file_path: str) -> str:
+    """Summarize a file."""
+    parser = SmartParser()
+    return parser.summarize_document(file_path)
+
+def suggest_subtasks_ai(task_title: str) -> list:
+    """Generate subtasks."""
+    parser = SmartParser()
+    return parser.generate_subtasks(task_title)
