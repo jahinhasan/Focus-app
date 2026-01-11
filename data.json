@@ -1,6 +1,6 @@
 {
     "level": 2,
-    "xp": 130,
+    "xp": 220,
     "streak": 0,
     "last_date": "2026-01-09",
     "tasks": [
@@ -20,6 +20,10 @@
                 },
                 {
                     "title": "hhhh",
+                    "done": true
+                },
+                {
+                    "title": "jj",
                     "done": false
                 }
             ],
@@ -34,11 +38,11 @@
             "subject": null,
             "schedule": null,
             "date": null,
-            "status": "pending",
+            "status": "done",
             "subtasks": [
                 {
                     "title": "sss",
-                    "done": false,
+                    "done": true,
                     "xp_given": false
                 }
             ],
@@ -165,7 +169,7 @@
             "schedule": null,
             "date": null,
             "days": null,
-            "status": "pending",
+            "status": "done",
             "subtasks": [],
             "documents": [],
             "created_at": "2026-01-11",
@@ -179,7 +183,7 @@
             "schedule": null,
             "date": null,
             "days": null,
-            "status": "pending",
+            "status": "done",
             "subtasks": [],
             "documents": [],
             "created_at": "2026-01-11",
@@ -193,9 +197,218 @@
             "schedule": null,
             "date": null,
             "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "025de0c2-a827-4125-8c36-20782333274b",
+            "type": "task",
+            "title": "Sunday: 08:00 CSE 2203 (RA), 09:00 EEE 2269 (MMH), 10:00 MATH 2247 (JB), 12:30 CSE 2202 (KS, MO)\n\nMonday: 08:00 CSE 2203 (RA), 09:00 CSE 2201 (KS), 10:00 CSE 2205 (AKZ), 14:30 HUM 2221 (AFH1)\n\nTuesday: 10:00 CSE 2201 (KS), 11:30 CSE 2203 (RA), 12:30 MATH 2247 (JB)\n\nWednesday: 08:00 EEE 2269 (MMH), 09:00 CSE 2201 (KS), 10:00 CSE 2205 (AKZ), 12:30 MATH 2247 (JB) #ODD#\n\nThursday: 08:00 CSE 2206 (AKZ, RR), 11:30 MATH 2247 (JB), 12:30 CSE 2205 (AKZ), 13:30 EEE 2269 (MMH)",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": true,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "2bbebaf1-9f81-4c96-a273-3cf7e2287cad",
+            "type": "class",
+            "title": "EEE 2269 (MMH)",
+            "subject": null,
+            "schedule": {
+                "days": [
+                    "sun",
+                    "wed",
+                    "thu"
+                ],
+                "start": "09:00",
+                "end": "08:00"
+            },
+            "date": null,
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "643c1c77-2753-4323-aa40-4ae0aba79fc6",
+            "type": "class",
+            "title": "MATH 2247 (JB)",
+            "subject": null,
+            "schedule": {
+                "days": [
+                    "sun",
+                    "tue",
+                    "wed",
+                    "thu"
+                ],
+                "start": "10:00",
+                "end": "12:30"
+            },
+            "date": null,
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "92ebdaf6-4050-491d-a184-2f9fe4aaa8e5",
+            "type": "class",
+            "title": "CSE 2202 (KS, MO)",
+            "subject": null,
+            "schedule": {
+                "days": [
+                    "sun"
+                ],
+                "start": "12:30",
+                "end": "13:30"
+            },
+            "date": null,
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "f675168c-7671-43fa-9bc6-aedb1a37e515",
+            "type": "class",
+            "title": "CSE 2206 (AKZ, RR)",
+            "subject": null,
+            "schedule": {
+                "days": [
+                    "thu"
+                ],
+                "start": "08:00",
+                "end": "09:30"
+            },
+            "date": null,
+            "days": null,
+            "notes": "",
+            "duration": null,
             "status": "pending",
             "subtasks": [],
             "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "687e100d-0730-441a-869a-3abe1c37c7d1",
+            "type": "task",
+            "title": "j",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-11",
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "51191320-891e-471c-8f98-0afd3acf8163",
+            "type": "task",
+            "title": "j",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-11",
+            "days": null,
+            "notes": "yyy",
+            "duration": null,
+            "status": "pending",
+            "subtasks": [
+                {
+                    "title": "hh",
+                    "done": false
+                }
+            ],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "c18ee369-d92d-45e8-9841-ae78bcba2ac6",
+            "type": "task",
+            "title": "gggg",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-11",
+            "days": null,
+            "notes": "i am \n",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "dc76d88d-034d-4845-9645-ea3434aa1263",
+            "type": "task",
+            "title": "a",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-11",
+            "days": null,
+            "notes": "",
+            "duration": null,
+            "status": "done",
+            "subtasks": [
+                {
+                    "title": "dd",
+                    "done": true
+                }
+            ],
+            "documents": [],
+            "review_needed": false,
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "ca891616-e252-41ff-85ea-80c32f24f32a",
+            "type": "task",
+            "title": "ss",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-11",
+            "days": null,
+            "notes": "i am fuckd",
+            "duration": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "review_needed": false,
             "created_at": "2026-01-11",
             "updated_at": "2026-01-11"
         }
@@ -227,9 +440,9 @@
             "xp_gained": 1
         },
         "2026-01-11": {
-            "completed": 7,
-            "total": 11,
-            "xp_gained": 70,
+            "completed": 19,
+            "total": 24,
+            "xp_gained": 164,
             "focus_minutes": 0
         }
     },
@@ -246,5 +459,35 @@
             "total_seconds": 900,
             "sessions": 1
         }
+    },
+    "subjects": {
+        "j": {
+            "notes": "",
+            "documents": []
+        }
+    },
+    "class_sessions": {},
+    "habits": [],
+    "settings": {
+        "theme": "System",
+        "daily_goal_hours": 4,
+        "pomodoro": {
+            "work": 49,
+            "short_break": 5,
+            "long_break": 15
+        },
+        "timer_style": "stopwatch"
+    },
+    "store": {
+        "unlocked": [
+            "theme_default",
+            "sound_rain"
+        ],
+        "xp_spent": 0
+    },
+    "timer_state": {
+        "seconds": 0,
+        "mode": "focus",
+        "class_id": null
     }
 }

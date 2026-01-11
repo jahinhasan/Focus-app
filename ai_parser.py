@@ -26,7 +26,10 @@ class RoutineNormalizer:
         "mon": "mon", "monday": "mon", "tue": "tue", "tuesday": "tue",
         "wed": "wed", "wednesday": "wed", "thu": "thu", "thursday": "thu",
         "fri": "fri", "friday": "fri", "sat": "sat", "saturday": "sat",
-        "sun": "sun", "sunday": "sun"
+        "sun": "sun", "sunday": "sun",
+        "daily": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+        "weekdays": ["mon", "tue", "wed", "thu", "fri"],
+        "weekends": ["sat", "sun"]
     }
 
     @staticmethod
@@ -42,10 +45,23 @@ class RoutineNormalizer:
         Matches: 10-11, 10:00-11:30, 8am-9pm, 08.00 - 09.00
         Returns: (start_time, end_time) in HH:MM format
         """
-        pattern = r"(\d{1,2}(?:[:.]\d{2})?(?:\s*[ap]m)?)\s*[-–to]+\s*(\d{1,2}(?:[:.]\d{2})?(?:\s*[ap]m)?)"
+        pattern = r"(\d{1,2}(?:[:.]\d{2})?(?:\s*[ap]m)?)\s*(?:[-–to]|until|till|\s)\s*(\d{1,2}(?:[:.]\d{2})?(?:\s*[ap]m)?)"
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             return RoutineNormalizer._format_time(match.group(1)), RoutineNormalizer._format_time(match.group(2))
+        
+        # Single time detection (assume 1 hour duration if only start time found)
+        single_pattern = r"(\d{1,2}(?:[:.]\d{2})?(?:\s*[ap]m)?)"
+        match = re.search(single_pattern, text, re.IGNORECASE)
+        if match:
+            start = RoutineNormalizer._format_time(match.group(1))
+            # Try to guess end time (e.g., +1 hour)
+            try:
+                h, m = map(int, start.split(":"))
+                end = f"{(h+1)%24:02}:{m:02}"
+                return start, end
+            except:
+                pass
         return None, None
 
     @staticmethod

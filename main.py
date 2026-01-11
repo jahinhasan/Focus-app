@@ -1,5 +1,5 @@
+from ui import run_app
 
-
-from ui import start_ui
-start_ui()
+if __name__ == "__main__":
+    run_app()
 

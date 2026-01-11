@@ -3,7 +3,7 @@
   "stats": {
     "queries": {
       "chat": 1,
-      "task": 21,
+      "task": 22,
       "class": 0,
       "schedule_file": 0
     }
@@ -186,6 +186,14 @@
       "intent": "task",
       "payload": {
         "title": "A-Class-Eee-On-January-11-At-17:26",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768143140,
+      "intent": "task",
+      "payload": {
+        "title": "Sunday: 08:00 CSE 2203 (RA), 09:00 EEE 2269 (MMH), 10:00 MATH 2247 (JB), 12:30 CSE 2202 (KS, MO)\n\nMonday: 08:00 CSE 2203 (RA), 09:00 CSE 2201 (KS), 10:00 CSE 2205 (AKZ), 14:30 HUM 2221 (AFH1)\n\nTuesday: 10:00 CSE 2201 (KS), 11:30 CSE 2203 (RA), 12:30 MATH 2247 (JB)\n\nWednesday: 08:00 EEE 2269 (MMH), 09:00 CSE 2201 (KS), 10:00 CSE 2205 (AKZ), 12:30 MATH 2247 (JB) #ODD#\n\nThursday: 08:00 CSE 2206 (AKZ, RR), 11:30 MATH 2247 (JB), 12:30 CSE 2205 (AKZ), 13:30 EEE 2269 (MMH)",
         "date": null
       }
     }

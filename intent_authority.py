@@ -1,257 +1,3 @@
-"""
-intent_authority.py
-
-Minimal 4-layer intent authority implementation to satisfy
-the IMPLEMENTATION_TODO.md requirements. Provides a safe,
-deterministic-first pipeline with advisory AI suggestions,
-clarification handling, and action execution hooks.
-"""
-from typing import List, Dict, Any, Optional
-import re
-import json
-import os
-
-from ai_parser import SmartParser
-from logic import load_data, add_task_logic, add_class_task, validate_class_input, save_data
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PENDING_FILE = os.path.join(BASE_DIR, "pending_intents.json")
-
-
-class IntentDetectionLayer:
-    """Deterministic detection using regex/heuristics."""
-
-    QUERY_PATTERNS = [r"^(what|when|how|why|where|whose|which|who)\s",
-                      r"^(show|tell|list|get)\s"]
-
-    def detect(self, text: str) -> List[Dict[str, Any]]:
-        lower = text.strip().lower()
-        candidates = []
-
-        # Query detection (high confidence)
-        if any(re.search(p, lower) for p in self.QUERY_PATTERNS):
-            candidates.append({"intent": "query", "confidence": 0.95, "source": "deterministic"})
-
-        # Class detection: look for day names + time ranges
-        if re.search(r"\b(mon(day)?|tue(sday)?|wed(nesday)?|thu(rsday)?|fri(day)?|sat(urday)?|sun(day)?)\b", lower) and re.search(r"\d{1,2}(:\d{2})?\s*[-–to]+\s*\d{1,2}(:\d{2})?", lower):
-            candidates.append({"intent": "class", "confidence": 0.9, "source": "deterministic"})
-
-        # Task detection: keywords
-        if any(k in lower for k in ["task", "assignment", "homework", "due"]) or lower.startswith("add "):
-            candidates.append({"intent": "task", "confidence": 0.85, "source": "deterministic"})
-
-        return candidates
-
-
-class AIIntentSuggestionLayer:
-    """Advisory AI suggestions using SmartParser. Non-authoritative."""
-
-    def __init__(self):
-        self.parser = SmartParser()
-
-    def suggest(self, text: str) -> Optional[Dict[str, Any]]:
-        try:
-            ai = self.parser.parse(text)
-            if ai and isinstance(ai, dict):
-                # Assign a modest confidence for AI suggestion
-                ai_candidate = ai.copy()
-                ai_candidate.setdefault("confidence", 0.7)
-                ai_candidate.setdefault("source", "ai")
-                return ai_candidate
-        except Exception:
-            pass
-        return None
-
-
-class IntentAuthorityLayer:
-    """Combine deterministic candidates and AI suggestions, enforce rules, and decide.
-    Returns a dict with final decision or a clarification request.
-    """
-
-    LOW_CONF_THRESHOLD = 0.6
-
-    def __init__(self):
-        self.detector = IntentDetectionLayer()
-        self.ai = AIIntentSuggestionLayer()
-
-    def resolve(self, text: str) -> Dict[str, Any]:
-        det = self.detector.detect(text)
-        ai_sugg = self.ai.suggest(text)
-
-        # Prefer deterministic high-confidence query detection
-        for c in det:
-            if c["intent"] == "query" and c["confidence"] >= 0.9:
-                return {"intent": "query", "source": "deterministic", "confidence": c["confidence"]}
-
-        # Merge candidates, use AI if deterministic is absent
-        candidates = det.copy()
-        if ai_sugg:
-            candidates.append(ai_sugg)
-
-        # Sort by confidence
-        candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
-
-        if not candidates:
-            # No hint - ask for clarification
-            return {"clarify": True, "question": "What would you like me to do? (add task, add class, or ask a question)"}
-
-        top = candidates[0]
-        intent = top.get("intent")
-        conf = top.get("confidence", 0.0)
-
-        # Hard rules enforcement
-        if intent == "query":
-            return {"intent": "query", "source": top.get("source", "ai"), "confidence": conf}
-
-        # If low confidence, ask clarification
-        if conf < self.LOW_CONF_THRESHOLD:
-            return {"clarify": True, "question": "I need a bit more detail to proceed. Could you rephrase or provide specifics?", "candidates": candidates}
-
-        # If class intent but missing schedule details, ask clarification
-        if intent == "class":
-            # Try to get structured class info from AI suggestion if available
-            if ai_sugg and ai_sugg.get("intent") == "class":
-                cls = ai_sugg
-            else:
-                # No structured info: ask for days/time
-                return {"clarify": True, "question": "What days and time is this class? (e.g. 'Mon Wed 10-11')"}
-
-            days = cls.get("days") or cls.get("schedule", {}).get("days")
-            start = cls.get("start") or cls.get("schedule", {}).get("start")
-            end = cls.get("end") or cls.get("schedule", {}).get("end")
-
-            if not (days and start and end):
-                return {"clarify": True, "question": "I need the days and start/end times to add the class. Example: 'Mon Wed 10-11'", "candidates": candidates}
-
-            # Validate via logic.validate_class_input
-            ok, err = validate_class_input(cls.get("title", "Class"), cls.get("subject", cls.get("title", "Class")), days, start, end)
-            if not ok:
-                return {"clarify": True, "question": f"Class data seems invalid: {err}. Please correct."}
-
-            return {"intent": "class", "data": {"title": cls.get("title", "Class"), "subject": cls.get("subject"), "days": days, "start": start, "end": end}, "confidence": conf}
-
-        # Task intent: ensure title exists
-        if intent == "task":
-            if ai_sugg and ai_sugg.get("intent") == "task":
-                task = ai_sugg
-            else:
-                # Best-effort local parse: take text as title
-                task = {"title": text}
-
-            title = task.get("title") or task.get("message")
-            if not title or len(title.strip()) < 2:
-                return {"clarify": True, "question": "What's the task title?"}
-
-            return {"intent": "task", "data": {"title": title.strip(), "date": task.get("date")}, "confidence": conf}
-
-        # Fallback
-        return {"clarify": True, "question": "I didn't understand. Could you clarify?", "candidates": candidates}
-
-
-class ActionExecutionLayer:
-    """Execute safe actions (mutations) when authority layer approves."""
-
-    def __init__(self):
-        self.data = load_data()
-
-    def execute(self, decision: Dict[str, Any]) -> Dict[str, Any]:
-        if decision.get("intent") == "query":
-            # Queries do not modify data; return a placeholder response
-            return {"status": "ok", "result": {"intent": "query", "message": "Handled as query. Use UI to display results."}}
-
-        if decision.get("intent") == "class":
-            d = decision.get("data", {})
-            added = add_class_task(self.data, title=d.get("title"), subject=d.get("subject"), days=d.get("days"), start_time=d.get("start"), end_time=d.get("end"))
-            if added:
-                return {"status": "ok", "result": {"intent": "class", "added": True, "task": added}}
-            return {"status": "error", "error": "Failed to add class"}
-
-        if decision.get("intent") == "task":
-            d = decision.get("data", {})
-            added = add_task_logic(self.data, title=d.get("title"), category="task", deadline=d.get("date"))
-            if added:
-                return {"status": "ok", "result": {"intent": "task", "added": True, "task": added}}
-            return {"status": "error", "error": "Failed to add task"}
-
-        return {"status": "error", "error": "Unknown intent"}
-
-
-# --- Persistence for pending intents ---
-def save_pending(pending: Dict[str, Any]):
-    try:
-        with open(PENDING_FILE, "w") as f:
-            json.dump(pending, f, indent=2)
-    except Exception:
-        pass
-
-
-def load_pending() -> Dict[str, Any]:
-    if not os.path.exists(PENDING_FILE):
-        return {}
-    try:
-        with open(PENDING_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-# --- Public API ---
-def process_text(text: str) -> Dict[str, Any]:
-    """Process user input through the 4-layer pipeline.
-
-    Returns a dict. If clarification is needed, contains `clarify: True` and `question`.
-    If decision made and execution performed, returns execution result.
-    """
-    authority = IntentAuthorityLayer()
-
-    # Support both older 'resolve' API and newer 'process' API
-    if hasattr(authority, "resolve"):
-        # old style
-        decision = authority.resolve(text)
-
-        if decision.get("clarify"):
-            # Save as pending candidate for later reference
-            pending = load_pending()
-            pending_entry = {"text": text, "candidates": decision.get("candidates"), "question": decision.get("question")}
-            pending[text] = pending_entry
-            save_pending(pending)
-            return {"clarify": True, "question": decision.get("question"), "pending": pending_entry}
-
-        # Execute approved decision using current ActionExecutionLayer
-        exec_layer = ActionExecutionLayer()
-        result = exec_layer.execute(decision)
-        return {"clarify": False, "decision": decision, "execution": result}
-
-    elif hasattr(authority, "process"):
-        # new style
-        proc = authority.process(text)
-
-        action = proc.get("action")
-        if action == "clarify":
-            # Persist pending via session-less key
-            pending = load_pending()
-            pending_entry = {"text": text, "question": proc.get("question"), "options": proc.get("options", [])}
-            pending[text] = pending_entry
-            save_pending(pending)
-            return {"clarify": True, "question": proc.get("question"), "pending": pending_entry}
-
-        elif action == "respond":
-            return {"clarify": False, "decision": {"intent": "query"}, "execution": {"status": "ok", "result": {"intent": "query", "message": proc.get("message")}}}
-
-        elif action == "execute":
-            # proc['intent'] is an IntentCandidate dataclass
-            exec_layer = ActionExecutionLayer()
-            try:
-                msg = exec_layer.execute(proc.get("intent"))
-                return {"clarify": False, "decision": {"intent": proc.get("intent")}, "execution": {"status": "ok", "result": {"message": msg}}}
-            except Exception as e:
-                return {"clarify": False, "decision": {"intent": proc.get("intent")}, "execution": {"status": "error", "error": str(e)}}
-
-        else:
-            return {"clarify": False, "decision": {}, "execution": {"status": "error", "error": "Unknown action"}}
-
-    else:
-        return {"clarify": True, "question": "Internal error: no authority method available."}
 # ==================== INTENT_AUTHORITY.PY ====================
 # Intent-safe, deterministic AI assistant architecture for Focus Dashboard
 # 4-layer system: Detection → Suggestion → Authority → Execution
@@ -488,7 +234,7 @@ class AIIntentSuggestionLayer:
     except Exception:
         client = None
     
-    SYSTEM_PROMPT = """You are a helpful assistant for Focus Dashboard (student productivity app).
+    BASE_SYSTEM_PROMPT = """You are a helpful assistant for Focus Dashboard (student productivity app).
 
 ## OUTPUT FORMAT
 You MUST output valid JSON:
@@ -538,11 +284,17 @@ Input: "Hello"
         if not self.client:
             return None
         
+        # Inject context if available
+        system_prompt = self.BASE_SYSTEM_PROMPT
+        if context:
+            context_str = "\n## USER CONTEXT\n" + "\n".join([f"- {k}: {v}" for k, v in context.items()])
+            system_prompt += context_str
+        
         try:
             completion = self.client.chat.completions.create(
                 model="llama3-70b-8192",
                 messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": text}
                 ],
                 temperature=0.1,  # Low temperature for consistency
@@ -617,7 +369,14 @@ class IntentAuthorityLayer:
         detection_candidates = self.detection_layer.detect(text)
         
         # LAYER 2: Get AI suggestion (advisory)
-        ai_candidate = self.ai_layer.suggest(text)
+        # Get context for better AI suggestions
+        try:
+            from ai_parser import get_user_context
+            ctx = get_user_context()
+        except ImportError:
+            ctx = {}
+            
+        ai_candidate = self.ai_layer.suggest(text, context=ctx)
         
         # Combine and analyze candidates
         candidates = detection_candidates.copy()
@@ -922,12 +681,17 @@ class ActionExecutionLayer:
         title = fields.get("title", "New Task").strip()
         date = fields.get("date")
         
-        task = add_task_logic(load_data(), title, deadline=date)
+        data = load_data()
+        task = add_task_logic(data, title, deadline=date)
         
+        if candidate.confidence < 0.85:
+            task["review_needed"] = True
+            save_data(data)
+            
         # Record to ACE
         record_query("task", {"title": title, "date": date})
         
-        return f"✅ Added task: **{title}**"
+        return f"✅ Added task: **{title}**" + (" (Marked for review ⚠️)" if candidate.confidence < 0.85 else "")
     
     def _execute_class(self, candidate: IntentCandidate) -> str:
         """Execute class addition."""
@@ -943,19 +707,24 @@ class ActionExecutionLayer:
             "end": end
         }
         
-        add_task_logic(
-            load_data(),
+        data = load_data()
+        task = add_task_logic(
+            data,
             title,
             category="class",
             schedule=schedule,
             days=days
         )
         
+        if candidate.confidence < 0.85:
+            task["review_needed"] = True
+            save_data(data)
+            
         # Record to ACE
         record_query("class", {"title": title, "days": days, "start": start, "end": end})
         learn_schedule_patterns([{"title": title, "days": days, "start": start, "end": end}])
         
-        return f"✅ Added class: **{title}** ({', '.join(days)} {start}-{end})"
+        return f"✅ Added class: **{title}** ({', '.join(days)} {start}-{end})" + (" (Marked for review ⚠️)" if candidate.confidence < 0.85 else "")
     
     def _execute_schedule_file(self, candidate: IntentCandidate) -> str:
         """Execute schedule file parsing and addition."""
@@ -1039,4 +808,3 @@ def clear_pending_intent(session_id: str = "default") -> None:
 def get_pending_intent(session_id: str = "default") -> Optional[PendingIntent]:
     """Get pending intent if exists."""
     return PENDING_INTENTS.get(session_id)
-

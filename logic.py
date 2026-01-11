@@ -27,7 +27,7 @@ def load_data():
         save_data(data)
         return data
 
-    with open(DATA_FILE, "r") as f:
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # Migrations & Validation
@@ -36,6 +36,24 @@ def load_data():
     data.setdefault("tasks", [])
     data.setdefault("history", {})
     data.setdefault("focus_sessions", {})
+    data.setdefault("class_sessions", {})
+
+    data.setdefault("habits", [])
+    data.setdefault("timer_state", {"seconds": 0, "mode": "focus", "class_id": None})
+    
+    # New settings and store defaults
+    if "store" not in data:
+        data["store"] = {"unlocked": ["theme_default", "sound_rain"], "xp_spent": 0}
+    
+    if "settings" not in data:
+        data["settings"] = {
+            "theme": "System",
+            "daily_goal_hours": 4,
+            "timer_style": "stopwatch", # stopwatch (count up) or countdown
+            "pomodoro": {"work": 25, "short_break": 5, "long_break": 15}
+        }
+    # The original setdefault for settings is now replaced by the more detailed 'if not in data' block above.
+    # data.setdefault("settings", {"theme": "System", "daily_goal_hours": 4}) 
     
     for task in data["tasks"]:
         if task.get("type") == "personal":
@@ -49,9 +67,11 @@ def load_data():
     return data
 
 def save_data(data):
-    """Save data to JSON file."""
-    with open(DATA_FILE, "w") as f:
+    """Save data to JSON file atomically."""
+    temp_file = DATA_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+    os.replace(temp_file, DATA_FILE)
 
 # ==================== XP SYSTEM ====================
 def add_xp(data, amount):
@@ -119,9 +139,24 @@ def log_focus_time(data, minutes):
     update_history(data, 0)  # Ensure entry exists
     data["history"][date_key]["focus_minutes"] = data["history"][date_key].get("focus_minutes", 0) + minutes
     save_data(data)
+    save_data(data)
 
+def update_timer_state(data, seconds, mode="focus", class_id=None):
+    """Save the current timer state for persistence."""
+    data["timer_state"] = {
+        "seconds": seconds,
+        "mode": mode,
+        "class_id": class_id,
+        "updated_at": str(datetime.now())
+    }
+    save_data(data)
+
+def clear_timer_state(data):
+    """Reset timer persistence."""
+    data["timer_state"] = {"seconds": 0, "mode": "focus", "class_id": None}
+    save_data(data)
 # ==================== TASK FACTORY ====================
-def create_task(*, title, task_type="task", subject=None, schedule=None, date=None, days=None):
+def create_task(*, title, task_type="task", subject=None, schedule=None, date=None, days=None, notes="", duration=None):
     """
     Create a new task.
     
@@ -132,6 +167,8 @@ def create_task(*, title, task_type="task", subject=None, schedule=None, date=No
         schedule: Dict with 'days', 'start', 'end' for classes
         date: Due date (YYYY-MM-DD) for tasks
         days: List of days ['mon', 'wed'] for classes (alternative to schedule)
+        notes: User notes/link storage
+        duration: Optional time limit in minutes
     
     Returns:
         Task dict
@@ -144,15 +181,18 @@ def create_task(*, title, task_type="task", subject=None, schedule=None, date=No
         "schedule": schedule,
         "date": date,
         "days": days,  # For classes: list of days
+        "notes": notes,
+        "duration": duration,
         "status": "pending",
         "subtasks": [],
         "documents": [],
+        "review_needed": False,
         "created_at": today(),
         "updated_at": today()
     }
 
 # ==================== TASK CRUD ====================
-def add_task_logic(data, title, category="task", deadline=None, days=None, schedule=None):
+def add_task_logic(data, title, category="task", deadline=None, days=None, schedule=None, notes="", duration=None, subject=None):
     """
     Add a new task.
     
@@ -163,6 +203,9 @@ def add_task_logic(data, title, category="task", deadline=None, days=None, sched
         deadline: Due date for tasks
         days: List of days for classes
         schedule: Schedule dict for classes
+        notes: User notes
+        duration: Time limit in minutes
+        subject: Optional subject name
     """
     if not title or not title.strip():
         return None
@@ -172,12 +215,43 @@ def add_task_logic(data, title, category="task", deadline=None, days=None, sched
         task_type=category,
         schedule=schedule,
         date=deadline,
-        days=days
+        days=days,
+        notes=notes,
+        duration=duration,
+        subject=subject
     )
     
     data.setdefault("tasks", []).append(new_task)
     save_data(data)
     return new_task
+
+def delete_task_logic(data, task_id):
+    """Delete a task by ID."""
+    data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
+    save_data(data)
+
+def update_task_logic(data, task_id, **fields):
+    """Update specific fields of a task."""
+    for task in data.get("tasks", []):
+        if task["id"] == task_id:
+            for k, v in fields.items():
+                task[k] = v
+            task["updated_at"] = today()
+            break
+    save_data(data)
+    
+def complete_task_logic(data, task_id):
+    """Mark a task as done and award XP."""
+    task = next((t for t in data.get("tasks", []) if t["id"] == task_id), None)
+    if not task: return
+    
+    if task.get("type") == "class":
+        mark_class_done(data, task_id)
+    else:
+        task["status"] = "done"
+        add_xp(data, 10)
+    
+    save_data(data)
 
 def add_subtask(data, task_id, title):
     """Add a subtask to a task."""
@@ -219,7 +293,8 @@ def add_class_task(data, *, title, subject=None, days=None, start_time=None, end
         title=title,
         category="class",
         schedule=schedule,
-        days=days
+        days=days,
+        subject=subject
     )
 
 def get_class_detail(data, task_id):
@@ -571,4 +646,256 @@ def validate_class_input(title, subject, days, start, end):
         return False, "Start time must be before end time"
 
     return True, None
+
+# The following lines were part of the instruction but appear to be misplaced or incomplete.
+# They are commented out to maintain syntactical correctness.
+#    return False, "End time required"
+#    return True, ""
+
+# ==================== VAULT & SUBJECTS ====================
+def add_subject(data, name):
+    """Add a new subject to the vault."""
+    subjects = data.setdefault("subjects", {})
+    if name not in subjects:
+        subjects[name] = {"notes": "", "documents": []}
+        save_data(data)
+        return True
+    return False
+
+def delete_subject(data, name):
+    """Delete a subject and its associated metadata."""
+    if name in data.get("subjects", {}):
+        del data["subjects"][name]
+        save_data(data)
+
+def add_vault_file(data, subject, file_path):
+    """Add a file to a subject in the vault."""
+    subjects = data.setdefault("subjects", {})
+    if subject not in subjects:
+        add_subject(data, subject)
+    
+    if file_path not in subjects[subject]["documents"]:
+        subjects[subject]["documents"].append(file_path)
+        save_data(data)
+
+def delete_vault_file(data, subject, file_path):
+    """Remove a file reference from a subject."""
+    if subject in data.get("subjects", {}) :
+        if file_path in data["subjects"][subject]["documents"]:
+            data["subjects"][subject]["documents"].remove(file_path)
+            save_data(data)
+
+def rename_subject(data, old_name, new_name):
+    """Rename a subject."""
+    if old_name in data.get("subjects", {}) and new_name not in data["subjects"]:
+        data["subjects"][new_name] = data["subjects"].pop(old_name)
+        # Update tasks that use this subject
+        for task in data.get("tasks", []):
+            if task.get("subject") == old_name:
+                task["subject"] = new_name
+        save_data(data)
+
+# ==================== HABITS ====================
+def add_habit(data, title):
+    """Add a new habit."""
+    if not title: return
+    new_habit = {
+        "id": str(uuid.uuid4()),
+        "title": title,
+        "history": [], # List of YYYY-MM-DD strings
+        "created_at": today()
+    }
+    data.setdefault("habits", []).append(new_habit)
+    save_data(data)
+    return new_habit
+
+def delete_habit(data, habit_id):
+    """Delete a habit."""
+    data["habits"] = [h for h in data.get("habits", []) if h["id"] != habit_id]
+    save_data(data)
+
+def toggle_habit_today(data, habit_id):
+    """Toggle habit completion for today."""
+    t = today()
+    habit = next((h for h in data.get("habits", []) if h["id"] == habit_id), None)
+    if not habit: return
+
+    if t in habit["history"]:
+        habit["history"].remove(t)
+        # Remove XP if untoggled? Simplify: No XP penalty/refund for now to avoid abuse/complexity
+    else:
+        habit["history"].append(t)
+        add_xp(data, 5) # Small XP reward for habit
+
+    save_data(data)
+
+def get_habit_streak(habit):
+    """Calculate current streak."""
+    history = set(habit.get("history", []))
+    if not history: return 0
+    
+    current_date = date.today()
+    streak = 0
+    
+    # Check if done today
+    if current_date.isoformat() in history:
+        streak += 1
+        current_date -= timedelta(days=1)
+    
+    # Check backwards
+    while True:
+        # If we didn't do it today, initially we check yesterday.
+        # If we DID do it today, current_date is already yesterday.
+        if current_date.isoformat() in history:
+            streak += 1
+            current_date -= timedelta(days=1)
+        else:
+            # If today is NOT done, check if yesterday was done to start the count.
+            # This logic ensures that if today is not done, but yesterday was, the streak from yesterday is counted.
+            # If the streak is 0 (meaning today wasn't done and we haven't found any previous days yet)
+            # and the current_date (which would be yesterday if today was done, or today if not) is not in history,
+            # we check the day before that.
+            if streak == 0 and current_date.isoformat() not in history:
+                 yesterday = current_date - timedelta(days=1)
+                 if yesterday.isoformat() in history:
+                     current_date = yesterday
+                     continue # Continue checking backwards from yesterday
+                 else:
+                     break # No streak found ending today or yesterday
+            else:
+                break # Streak ended or we've gone past the start of the streak
+                
+    return streak
+
+# ==================== ANALYTICS ====================
+def get_analytics_data(data):
+    """Get aggregated data for reports."""
+    stats = {
+        "subject_time": {},
+        "daily_focus": {},
+    }
+    
+    # Subject Breakdown
+    # Access class_sessions: {date: {class_id: {total_seconds: ...}}}
+    # Need to map class_id to Subject Name
+    
+    # Build class_id -> subject map
+    class_map = {}
+    for task in data.get("tasks", []):
+        if task["type"] == "class":
+            class_map[task["id"]] = task.get("subject", "Unknown")
+            
+    class_sessions = data.get("class_sessions", {})
+    for day, classes in class_sessions.items():
+        for cid, info in classes.items():
+            subj = class_map.get(cid, "Unknown")
+            stats["subject_time"][subj] = stats["subject_time"].get(subj, 0) + info.get("total_seconds", 0)
+            
+    # Daily Focus (Total + Class)
+    # focus_sessions: {date: {total_seconds: ..., class_seconds: ...}}
+    focus_sessions = data.get("focus_sessions", {})
+    # Sort last 7 days
+    dates = sorted(list(set(list(focus_sessions.keys()) + list(class_sessions.keys()))))[-7:]
+    
+    for d in dates:
+        # Total focus log
+        f_info = focus_sessions.get(d, {})
+        f_seconds = f_info.get("total_seconds", 0)
+        
+        # Add class seconds if not included (logic.py log_focus_session with type='class' DOES add to focus_sessions class_seconds)
+        # But log_class_session also logs to class_sessions.
+        # Let's rely on focus_sessions for daily totals as it aggregates both types in 'focus_sessions' dict?
+        # Check log_focus_session: 
+        #   if session_type == "class": data["focus_sessions"][date]["class_seconds"] += ...
+        #   else: total_seconds += ...
+        
+        total = f_seconds + f_info.get("class_seconds", 0)
+        stats["daily_focus"][d] = total / 60 # Minutes
+        
+    return stats
+
+# ==================== ANALYTICS & HEATMAP ====================
+def get_heatmap_data(data):
+    """
+    Get daily activity intensity for the last 365 days.
+    Returns: { "YYYY-MM-DD": count (0-4 intensity) }
+    """
+    history = data.get("history", {})
+    heatmap = {}
+    
+    # Calculate max activity to normalize intensity
+    # Metric: tasks_completed * 10 + xp_gained / 10 + focus_minutes / 5
+    # Just simpler: tasks + focus_hours?
+    
+    for date_str, entry in history.items():
+        tasks = entry.get("completed", 0)
+        # Handle different focus tracking keys
+        focus_sec = entry.get("focus_minutes", 0) * 60 # Convert minutes to seconds
+        
+        # Approximate "intensity score"
+        score = tasks * 2 + (focus_sec / 900) # 1 task = 2 pts, 15 min focus = 1 pt
+        
+        # Map score to 0-4
+        if score == 0: intensity = 0
+        elif score < 5: intensity = 1
+        elif score < 10: intensity = 2
+        elif score < 20: intensity = 3
+        else: intensity = 4
+        
+        heatmap[date_str] = intensity
+        
+    return heatmap
+
+# ==================== POMODORO SETTINGS ====================
+def get_pomodoro_settings(data):
+    return data.get("settings", {}).get("pomodoro", {"work": 25, "short_break": 5, "long_break": 15})
+
+def update_pomodoro_settings(data, work, short, long, style="stopwatch"):
+    """Update Pomodoro durations and style."""
+    settings = data.setdefault("settings", {})
+    settings["pomodoro"] = {
+        "work": int(work),
+        "short_break": int(short),
+        "long_break": int(long)
+    }
+    settings["timer_style"] = style
+    save_data(data)
+
+# ==================== XP STORE LOGIC ====================
+STORE_ITEMS = [
+    {"id": "theme_cyber", "name": "Cyberpunk Theme", "type": "theme", "cost": 500, "desc": "Neon vibes for night coding."},
+    {"id": "theme_forest", "name": "Forest Theme", "type": "theme", "cost": 300, "desc": "Calm green aesthetics."},
+    {"id": "zen_mode", "name": "Zen Mode", "type": "feature", "cost": 1000, "desc": "Minimalist Always-on-Top Timer."},
+]
+
+def get_store_items(data):
+    """Get all items with unlock status."""
+    unlocked = data.get("store", {}).get("unlocked", [])
+    items = []
+    for item in STORE_ITEMS:
+        item_copy = item.copy()
+        item_copy["unlocked"] = item["id"] in unlocked
+        items.append(item_copy)
+    return items
+
+def purchase_item(data, item_id):
+    """Attempt to purchase item. Returns (success, message)."""
+    item = next((i for i in STORE_ITEMS if i["id"] == item_id), None)
+    if not item: return False, "Item not found."
+    
+    store = data.setdefault("store", {"unlocked": [], "xp_spent": 0})
+    if item_id in store["unlocked"]:
+        return False, "Already owned."
+    
+    if data["xp"] >= item["cost"]:
+        data["xp"] -= item["cost"]
+        store["unlocked"].append(item_id)
+        store["xp_spent"] += item["cost"]
+        save_data(data)
+        return True, f"Successfully purchased {item['name']}!"
+    else:
+        return False, f"Not enough XP! Need {item['cost'] - data['xp']} more."
+
+def is_unlocked(data, item_id):
+    return item_id in data.get("store", {}).get("unlocked", [])
 
