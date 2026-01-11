@@ -12,13 +12,14 @@ from logic import (
     get_level_progress, get_active_class, mark_class_done,
     sync_class_statuses, log_focus_time, cleanup_finished_classes,
     get_today_tasks, get_weekly_class_tasks, today, format_seconds_to_hms,
+    get_task_by_id, # Added missing import
     log_class_session, get_today_focus_stats, log_focus_session,
     complete_task_logic, add_xp, delete_task_logic, update_task_logic,
     add_subject, delete_subject, add_vault_file, delete_vault_file, rename_subject,
     add_habit, delete_habit, toggle_habit_today, get_habit_streak, get_analytics_data,
     get_heatmap_data, get_store_items, purchase_item, is_unlocked,
     get_pomodoro_settings, update_pomodoro_settings,
-    update_timer_state, clear_timer_state
+    update_timer_state, clear_timer_state, process_daily_automation # Added automation
 )
 import subprocess
 from ai_parser import format_today_schedule, format_user_stats
@@ -152,7 +153,7 @@ class Tooltip:
         self.tooltip = tk.Toplevel(self.widget)
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
-        self.tooltip.configure(bg=COLORS["card"])
+        self.tooltip.configure(bg=get_color_str("card"))
         
         frame = ctk.CTkFrame(self.tooltip, fg_color=COLORS["card"], corner_radius=8,
                              border_width=1, border_color=COLORS["border"])
@@ -1705,6 +1706,10 @@ class FocusApp(ctk.CTk):
         self.configure(fg_color=COLORS["bg"])
 
         self.data = load_data()
+        
+        # Run Automation
+        process_daily_automation(self.data)
+        
         self.active_view = None  # Will be set by switch_view
 
         # Timer State - RESTORED FROM PERSISTENCE
@@ -1967,6 +1972,17 @@ class FocusApp(ctk.CTk):
                 self.timer_mode = "focus"
                 self.active_class_id = None
         
+        # Auto-Attendance Check
+        ended_classes = sync_class_statuses(self.data)
+        if ended_classes:
+            for task_id in ended_classes:
+                task = get_task_by_id(self.data, task_id)
+                if task:
+                    if messagebox.askyesno("Class Ended", f"Did you attend '{task['title']}'?"):
+                        mark_class_done(self.data, task_id)
+                        add_xp(self.data, 20) 
+                        self.refresh_xp()
+
         self.after(1000, self.update_clock)
 
     def update_timer(self):
@@ -1981,9 +1997,32 @@ class FocusApp(ctk.CTk):
             self.timer_seconds -= elapsed
             
             if self.timer_seconds <= 0:
+                # Auto-Flow Logic
+                was_work = (self.active_class_id is not None) or (self.timer_mode == "focus")
+                
                 self.timer_seconds = 0
-                self.stop_timer(log=True) # Auto stop
-                self.sound_mgr.play("success")
+                self.stop_timer(log=True) # Logs the finished session
+                
+                # Switch Modes
+                pom = get_pomodoro_settings(self.data)
+                
+                if was_work:
+                    # Work -> Break
+                    self.timer_seconds = pom.get("short_break", 5) * 60
+                    self.timer_mode = "break" # Internal mode tag
+                    msg = "Focus Session Complete! Time for a Break? ☕"
+                else:
+                    # Break -> Work
+                    self.timer_seconds = pom.get("work", 25) * 60
+                    self.timer_mode = "focus"
+                    msg = "Break is over! Ready to Focus? 🚀"
+                
+                # Update UI for new state
+                self.timer_lbl.configure(text=format_seconds_to_hms(int(self.timer_seconds)))
+                
+                if messagebox.askyesno("Timer Chain", msg):
+                    self.start_timer()
+                
                 return
         else: # stopwatch
             self.timer_seconds += elapsed

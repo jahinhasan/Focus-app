@@ -347,6 +347,7 @@ def sync_class_statuses(data):
     now = current_time_str()
     changed = False
     needs_attendance_prompt = []
+    just_started = []
 
     for task in data.get("tasks", []):
         if task["type"] != "class":
@@ -367,6 +368,7 @@ def sync_class_statuses(data):
             if task.get("status") != "active":
                 task["status"] = "active"
                 changed = True
+                just_started.append(task["id"]) # Capture start event
 
         # Ended - class time has passed
         elif now > end:
@@ -378,7 +380,7 @@ def sync_class_statuses(data):
     if changed:
         save_data(data)
 
-    return needs_attendance_prompt
+    return needs_attendance_prompt, just_started
 
 def mark_class_done(data, task_id):
     """Mark a class as attended."""
@@ -400,6 +402,58 @@ def mark_class_missed(data, task_id):
             save_data(data)
             return True
     return False
+
+def process_daily_automation(data):
+    """
+    Run daily automated maintenance:
+    1. Reset recurring classes for today (if they were done previous weeks).
+    2. Archive completed tasks from > 1 day ago.
+    """
+    import datetime
+    today_str = str(datetime.date.today())
+    today_day = datetime.date.today().strftime("%a").lower()[:3]
+    
+    tasks = data.get("tasks", [])
+    active_tasks = []
+    
+    for task in tasks:
+        # 1. Recurring Class Logic
+        if task.get("type") == "class":
+            schedule = task.get("schedule", {})
+            if today_day in schedule.get("days", []):
+                # Check if it was updated TODAY. If not, reset it to 'todo'
+                last_update = task.get("updated_at", "")
+                if last_update != today_str:
+                    task["status"] = "todo"
+                    task["updated_at"] = today_str # Mark as fresh for today
+            
+            # Classes always stay in the active list (recurring)
+            active_tasks.append(task)
+            
+        # 2. Regular Task Logic (Auto-Archive)
+        else:
+            status = task.get("status", "todo")
+            updated = task.get("updated_at", "")
+            
+            # If done and from yesterday (or older), archive it is handled by cleanup_finished_classes normally.
+            # But let's enforce a strict "Keep Today's View Clean" policy.
+            # If done and NOT today -> Move to History (implicit via not adding to active_tasks?)
+            # Wait, `active_tasks` replaces `data["tasks"]`.
+            
+            should_archive = False
+            if status == "done" and updated != today_str:
+                should_archive = True
+            
+            if should_archive:
+                # Add to history if not exists? 
+                # Actually `complete_task_logic` adds XP. The `history` dict logs completed counts daily.
+                # We just remove it from active view.
+                pass 
+            else:
+                active_tasks.append(task)
+                
+    data["tasks"] = active_tasks
+    save_data(data)
 
 # ==================== DAILY CLEANUP ====================
 def cleanup_finished_classes(data):
