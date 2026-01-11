@@ -1,64 +1,203 @@
 {
-    "level": 1,
-    "xp": 46,
+    "level": 2,
+    "xp": 130,
     "streak": 0,
     "last_date": "2026-01-09",
     "tasks": [
         {
-            "title": "Solve DSA",
-            "done": false,
+            "id": "2bbe718d-f2b7-48c5-bbc4-e51e7943653c",
+            "type": "task",
+            "title": "physis",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "status": "pending",
             "subtasks": [
                 {
-                    "title": "2 easy problems",
+                    "title": "has",
                     "done": true,
                     "xp_given": true
                 },
                 {
-                    "title": "1 medium problem",
-                    "done": false,
-                    "xp_given": false
+                    "title": "hhhh",
+                    "done": false
                 }
             ],
-            "id": "f5f19d65-2517-4973-9114-ee8a3e8b3506"
+            "documents": [],
+            "created_at": "2026-01-09",
+            "updated_at": "2026-01-09"
         },
         {
-            "title": "Learn Kotlin kkjj",
-            "done": false,
-            "subtasks": [
-                {
-                    "title": "Functionsjjj",
-                    "done": false,
-                    "xp_given": false
-                },
-                {
-                    "title": "Practice examples",
-                    "done": false,
-                    "xp_given": false
-                }
-            ],
-            "id": "88214a8c-f87a-4478-b5f6-313e6f9b6281"
-        },
-        {
+            "id": "a62e938e-0bf0-4c6b-add8-f3682f40fc93",
+            "type": "task",
             "title": "jahin",
-            "done": false,
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "status": "pending",
             "subtasks": [
                 {
-                    "title": "jahiiiidddd",
-                    "done": false,
-                    "xp_given": false
-                },
-                {
-                    "title": "jjj",
-                    "done": false,
-                    "xp_given": false
-                },
-                {
-                    "title": "jjjjja",
+                    "title": "sss",
                     "done": false,
                     "xp_given": false
                 }
             ],
-            "id": "8b02d778-0332-449e-8408-3fe96ae7cf58"
+            "documents": [],
+            "created_at": "2026-01-09",
+            "updated_at": "2026-01-09"
+        },
+        {
+            "id": "8831326a-2f9a-4c4f-99ad-4c23075de868",
+            "type": "task",
+            "title": "Physs asisngment",
+            "subject": null,
+            "schedule": null,
+            "date": "2026-01-10",
+            "status": "pending",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-10",
+            "updated_at": "2026-01-10"
+        },
+        {
+            "id": "c59bc179-c6bb-4d6a-81cf-08b63c1df4ee",
+            "type": "task",
+            "title": "I have physis",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "739e13d6-cd5c-4db5-be3c-8c46984da32a",
+            "type": "task",
+            "title": "I have physis assisnment tommorow",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "287b2eb2-9f81-48dc-82fc-5407d6a83e80",
+            "type": "task",
+            "title": "How much xp do i have?",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "680939b6-10e0-43fb-824b-0bc54f871749",
+            "type": "task",
+            "title": "When is my next class?",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "28c853a4-ce60-4c4e-bf30-a7baac4b765e",
+            "type": "task",
+            "title": "What do i have today?",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "93ebc6f8-ca76-46e2-873a-f5a25abbf710",
+            "type": "task",
+            "title": "How much xp do i have?",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "77b3a242-69c9-4cb1-959a-1674ddaa7e66",
+            "type": "task",
+            "title": "I am physis 10 february",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "done",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "19e6d316-f215-4eb4-a436-42f5b4c78036",
+            "type": "task",
+            "title": "Phy-Exam",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "pending",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "65272a1e-ddda-4f9e-9291-6b80907479a2",
+            "type": "task",
+            "title": "Physis-O-10-Febb",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "pending",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
+        },
+        {
+            "id": "8973faf0-a731-43fa-86d5-28dba5568316",
+            "type": "task",
+            "title": "A-Class-Eee-On-January-11-At-17:26",
+            "subject": null,
+            "schedule": null,
+            "date": null,
+            "days": null,
+            "status": "pending",
+            "subtasks": [],
+            "documents": [],
+            "created_at": "2026-01-11",
+            "updated_at": "2026-01-11"
         }
     ],
     "history": {
@@ -79,8 +218,19 @@
         },
         "2026-01-09": {
             "completed": 0,
-            "total": 3,
+            "total": 1,
             "xp_gained": 0
+        },
+        "2026-01-10": {
+            "completed": 1,
+            "total": 2,
+            "xp_gained": 1
+        },
+        "2026-01-11": {
+            "completed": 7,
+            "total": 11,
+            "xp_gained": 70,
+            "focus_minutes": 0
         }
     },
     "focus_sessions": {

@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "stats": {
+    "queries": {
+      "chat": 1,
+      "task": 21,
+      "class": 0,
+      "schedule_file": 0
+    }
+  },
+  "patterns": {
+    "days": {},
+    "time_ranges": {},
+    "titles": {}
+  },
+  "history": [
+    {
+      "ts": 1768077634,
+      "intent": "chat",
+      "payload": {
+        "greeting": true
+      }
+    },
+    {
+      "ts": 1768077654,
+      "intent": "task",
+      "payload": {
+        "title": "I have physis assisnment tommorow",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768077673,
+      "intent": "task",
+      "payload": {
+        "title": "How much xp do i have?",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768077677,
+      "intent": "task",
+      "payload": {
+        "title": "When is my next class?",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078228,
+      "intent": "task",
+      "payload": {
+        "title": "What do i have today?",
+        "date": "2026-01-11"
+      }
+    },
+    {
+      "ts": 1768078239,
+      "intent": "task",
+      "payload": {
+        "title": "How much xp do i have?",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078542,
+      "intent": "task",
+      "payload": {
+        "title": "I am physis 10 february",
+        "date": "2026-02-10"
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Physics-Ruary",
+        "date": "2026-02-10"
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Submit-Lab-Report-By",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Math-Homework",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Finish-Essay",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Complete-Project-Work",
+        "date": "2026-01-12"
+      }
+    },
+    {
+      "ts": 1768078747,
+      "intent": "task",
+      "payload": {
+        "title": "Physics",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Physics-Ruary",
+        "date": "2026-02-10"
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Submit-Lab-Report-By",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Math-Homework",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Finish-Essay",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Complete-Project-Work",
+        "date": "2026-01-12"
+      }
+    },
+    {
+      "ts": 1768078915,
+      "intent": "task",
+      "payload": {
+        "title": "Physics",
+        "date": null
+      }
+    },
+    {
+      "ts": 1768079071,
+      "intent": "task",
+      "payload": {
+        "title": "Phy-Exam",
+        "date": "2026-02-10"
+      }
+    },
+    {
+      "ts": 1768130652,
+      "intent": "task",
+      "payload": {
+        "title": "Physis-O-10-Febb",
+        "date": "2026-02-10"
+      }
+    },
+    {
+      "ts": 1768130723,
+      "intent": "task",
+      "payload": {
+        "title": "A-Class-Eee-On-January-11-At-17:26",
+        "date": null
+      }
+    }
+  ]
+}

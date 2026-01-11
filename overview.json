@@ -1,0 +1,400 @@
+{
+  "rootFolder": "/home/jahinhasan/jahin/projects/focus_dashboard",
+  "analyzedAt": "2026-01-11T11:23:33.220Z",
+  "rootStructure": [
+    {
+      "name": "AI_ENHANCEMENT_TODO.md",
+      "type": "file",
+      "size": 1552,
+      "lines": 48
+    },
+    {
+      "name": "IMPLEMENTATION_TODO.md",
+      "type": "file",
+      "size": 805,
+      "lines": 22
+    },
+    {
+      "name": "STOPWATCH_AI_TODO.md",
+      "type": "file",
+      "size": 1225,
+      "lines": 36
+    },
+    {
+      "name": "TODO.md",
+      "type": "file",
+      "size": 772,
+      "lines": 25
+    },
+    {
+      "name": "__pycache__",
+      "type": "dir"
+    },
+    {
+      "name": "ace_integration.py",
+      "type": "file",
+      "size": 4741,
+      "lines": 144
+    },
+    {
+      "name": "ai_parser.py",
+      "type": "file",
+      "size": 25280,
+      "lines": 626
+    },
+    {
+      "name": "class_schedule.py",
+      "type": "file",
+      "size": 706,
+      "lines": 30
+    },
+    {
+      "name": "data.json",
+      "type": "file",
+      "size": 6264,
+      "lines": 222
+    },
+    {
+      "name": "file_handler.py",
+      "type": "file",
+      "size": 1848,
+      "lines": 60
+    },
+    {
+      "name": "file_parser.py",
+      "type": "file",
+      "size": 2547,
+      "lines": 84
+    },
+    {
+      "name": "logic.py",
+      "type": "file",
+      "size": 16806,
+      "lines": 575
+    },
+    {
+      "name": "main.py",
+      "type": "file",
+      "size": 38,
+      "lines": 6
+    },
+    {
+      "name": "overview.json",
+      "type": "file",
+      "size": 8992,
+      "lines": 362
+    },
+    {
+      "name": "overview_architecture.puml",
+      "type": "file",
+      "size": 246,
+      "lines": 7
+    },
+    {
+      "name": "skillbook.json",
+      "type": "file",
+      "size": 3195,
+      "lines": 177
+    },
+    {
+      "name": "tempCodeRunnerFile.py",
+      "type": "file",
+      "size": 14027,
+      "lines": 482
+    },
+    {
+      "name": "temp_uploads",
+      "type": "dir"
+    },
+    {
+      "name": "ui.py",
+      "type": "file",
+      "size": 38140,
+      "lines": 961
+    },
+    {
+      "name": "utils.py",
+      "type": "file",
+      "size": 230,
+      "lines": 15
+    },
+    {
+      "name": "venv",
+      "type": "dir"
+    }
+  ],
+  "rootFileSnippets": {
+    "AI_ENHANCEMENT_TODO.md": [
+      "# AI Assistant Enhancement - TODO",
+      "",
+      "## Phase 1: Enhanced AI Parser (ai_parser.py)",
+      "- [x] Add `get_user_context()` function for AI context",
+      "- [x] Add `format_today_schedule()` function for AI responses",
+      "- [x] Add `format_user_stats()` function for AI responses",
+      "- [x] Add `format_upcoming_classes()` function",
+      "- [x] Create enhanced system prompt with user context",
+      "- [x] Add improved temperature (0.3) for more conversational responses",
+      "- [x] Add max_tokens for longer, helpful responses"
+    ],
+    "IMPLEMENTATION_TODO.md": [
+      "# Implementation Plan - Stopwatch & AI Enhancement",
+      "",
+      "## Phase 1: Timer Conversion (Stopwatch)",
+      "- [ ] 1.1 Update logic.py - Add stopwatch tracking functions",
+      "- [ ] 1.2 Update ui.py - Convert timer UI from countdown to count-up",
+      "- [ ] 1.3 Add auto-start/stop with class detection",
+      "- [ ] 1.4 Add visual indicators (Class Mode vs Focus Session)",
+      "- [ ] 1.5 Add \"Focus Time Today\" display",
+      "- [ ] 1.6 Add aesthetic improvements (gradients, glowing effects)",
+      ""
+    ],
+    "STOPWATCH_AI_TODO.md": [
+      "# Focus Dashboard - Stopwatch & AI Enhancement",
+      "",
+      "## Phase 1: Stopwatch Timer (instead of Pomodoro)",
+      "- [ ] Change timer from countdown to count-up (HH:MM:SS format)",
+      "- [ ] Track total focus time accumulated",
+      "- [ ] Add \"Focus Time\" display showing today's total",
+      "",
+      "## Phase 2: Class-Aware Timer",
+      "- [ ] Auto-start stopwatch when class begins",
+      "- [ ] Auto-stop when class ends"
+    ],
+    "TODO.md": [
+      "# TODO - Timer & AI Assistant Upgrades",
+      "",
+      "## Phase 1: Transform Timer to Stopwatch",
+      "- [ ] Change countdown to count-up stopwatch (HH:MM:SS format)",
+      "- [ ] Auto-start timer when class begins",
+      "- [ ] Show class name alongside timer when in class mode",
+      "- [ ] Add \"Class Mode\" visual indicator",
+      "- [ ] Update timer UI components",
+      "",
+      "## Phase 2: Enhance AI Assistant"
+    ],
+    "ace_integration.py": [
+      "# ==================== ACE_INTEGRATION.PY ====================",
+      "# Optional self-learning layer for Focus Dashboard",
+      "# Provides a persistent \"skillbook\" and lightweight learning hooks.",
+      "# Designed to work even if external ACE framework is not installed.",
+      "",
+      "import os",
+      "import json",
+      "import time",
+      "from typing import Any, Dict, List",
+      ""
+    ],
+    "ai_parser.py": [
+      "# ==================== AI_PARSER.PY ====================",
+      "# AI-powered parsing for Focus Dashboard",
+      "# Handles natural language understanding for tasks, classes, and file parsing",
+      "",
+      "import os",
+      "import json",
+      "import re",
+      "from datetime import datetime",
+      "from file_parser import FileParser",
+      "from datetime import datetime, timedelta"
+    ],
+    "class_schedule.py": [
+      "# schedule.py",
+      "from datetime import datetime",
+      "SCHEDULE = {",
+      "\"monday\": [",
+      "{\"title\": \"Math\", \"start\": \"09:00\", \"end\": \"10:30\"},",
+      "{\"title\": \"Physics\", \"start\": \"11:00\", \"end\": \"12:30\"},",
+      "],",
+      "\"tuesday\": [",
+      "{\"title\": \"Programming\", \"start\": \"10:00\", \"end\": \"11:30\"},",
+      "],"
+    ],
+    "data.json": [
+      "{",
+      "\"level\": 2,",
+      "\"xp\": 130,",
+      "\"streak\": 0,",
+      "\"last_date\": \"2026-01-09\",",
+      "\"tasks\": [",
+      "{",
+      "\"id\": \"2bbe718d-f2b7-48c5-bbc4-e51e7943653c\",",
+      "\"type\": \"task\",",
+      "\"title\": \"physis\","
+    ],
+    "file_handler.py": [
+      "import os",
+      "import tkinter as tk",
+      "from datetime import datetime",
+      "",
+      "try:",
+      "from PIL import ImageGrab",
+      "except ImportError:",
+      "ImageGrab = None",
+      "",
+      "class FileHandler:"
+    ],
+    "file_parser.py": [
+      "import os",
+      "import mimetypes",
+      "",
+      "try:",
+      "import PyPDF2",
+      "except ImportError:",
+      "PyPDF2 = None",
+      "",
+      "try:",
+      "import docx"
+    ],
+    "logic.py": [
+      "# ==================== LOGIC.PY ====================",
+      "# Core business logic for Focus Dashboard",
+      "# Handles tasks, classes, XP, history, and routine management",
+      "",
+      "import json",
+      "import os",
+      "import uuid",
+      "import math",
+      "from datetime import date, datetime, timedelta",
+      "from utils import today"
+    ],
+    "main.py": [
+      "",
+      "",
+      "from ui import start_ui",
+      "start_ui()",
+      "",
+      ""
+    ],
+    "overview.json": [
+      "{",
+      "\"rootFolder\": \"/home/jahinhasan/jahin/projects/focus_dashboard\",",
+      "\"analyzedAt\": \"2026-01-10T20:54:11.438Z\",",
+      "\"rootStructure\": [",
+      "{",
+      "\"name\": \"AI_ENHANCEMENT_TODO.md\",",
+      "\"type\": \"file\",",
+      "\"size\": 1552,",
+      "\"lines\": 48",
+      "},"
+    ],
+    "overview_architecture.puml": [
+      "@startuml",
+      "' Generated by SASVA Maria on 2026-01-10T20:54:21.552Z",
+      "' ERROR: Diagram generation failed",
+      "",
+      "note \"Architecture Diagram Generation Failed\\n\\nError: No chat model configured\\n\\nPlease check the logs for more details.\" as ErrorNote",
+      "",
+      "@enduml"
+    ],
+    "skillbook.json": [
+      "{",
+      "\"version\": 1,",
+      "\"stats\": {",
+      "\"queries\": {",
+      "\"chat\": 1,",
+      "\"task\": 19,",
+      "\"class\": 0,",
+      "\"schedule_file\": 0",
+      "}",
+      "},"
+    ],
+    "tempCodeRunnerFile.py": [
+      "# ==================== LOGIC.PY ====================",
+      "# Core business logic for Focus Dashboard",
+      "# Handles tasks, classes, XP, history, and routine management",
+      "",
+      "import json",
+      "import os",
+      "import uuid",
+      "import math",
+      "from datetime import date, datetime, timedelta",
+      "from utils import today"
+    ],
+    "ui.py": [
+      "# ==================== UI.PY ====================",
+      "# Tkinter-based UI for Focus Dashboard",
+      "",
+      "import tkinter as tk",
+      "from tkinter import ttk, messagebox, filedialog",
+      "from datetime import datetime",
+      "from logic import save_routine_from_parser",
+      "",
+      "",
+      "from logic import ("
+    ],
+    "utils.py": [
+      "from datetime import date",
+      "",
+      "LEVEL_XP = 100",
+      "TARGET_DAYS = 7",
+      "",
+      "",
+      "def today():",
+      "return date.today().isoformat()",
+      "",
+      ""
+    ]
+  },
+  "importantFolders": [],
+  "readmeParagraphs": {},
+  "totals": {
+    "numFiles": 19,
+    "numDirs": 8,
+    "totalSizeBytes": 127709,
+    "totalLinesOfCode": 2983
+  },
+  "fileCategories": {
+    "other": 2,
+    "documentation": 4,
+    "source": 10,
+    "config": 3
+  },
+  "linesOfCodePerLanguage": {
+    "Python": 2983
+  },
+  "filesPerLanguage": {
+    "Python": 10
+  },
+  "projectTypes": [],
+  "frameworks": [],
+  "entryPoints": [],
+  "ciCdTools": [],
+  "packageManagers": [],
+  "topLevelDirectories": [],
+  "detailedDirectories": [],
+  "architecturalInsights": {
+    "coreApplications": [],
+    "entryPointDetails": [],
+    "serviceArchitecture": {
+      "microservices": [],
+      "monoliths": [],
+      "libraries": []
+    },
+    "layeredArchitecture": {
+      "presentation": [],
+      "business": [],
+      "data": [],
+      "infrastructure": []
+    }
+  },
+  "largeFiles": [],
+  "dependencies": {
+    "production": [],
+    "development": [],
+    "total": 0
+  },
+  "complexity": {
+    "averageFileSize": 157,
+    "maxFileSize": 0,
+    "nestedDepth": 0,
+    "estimatedComplexity": "low"
+  },
+  "gitRepo": {
+    "firstCommitDate": "2026-01-09",
+    "totalCommits": 10,
+    "numContributors": 0,
+    "currentBranch": "main",
+    "remoteUrls": [
+      "https://github.com/jahinhasan/Focus-app.git"
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "Add math homework tomorrow": {
+    "text": "Add math homework tomorrow",
+    "question": "Would you like me to add this as a task, or was that just a note?",
+    "options": [
+      "Add as task",
+      "Just a note",
+      "Help me phrase it"
+    ]
+  },
+  "Physics class Mon Wed 10-11": {
+    "text": "Physics class Mon Wed 10-11",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  },
+  "How much XP do I have?": {
+    "text": "How much XP do I have?",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  },
+  "What's my next class?": {
+    "text": "What's my next class?",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  },
+  "Do something unclear": {
+    "text": "Do something unclear",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  },
+  "Productivity tips": {
+    "text": "Productivity tips",
+    "question": "Would you like me to add this as a task, or was that just a note?",
+    "options": [
+      "Add as task",
+      "Just a note",
+      "Help me phrase it"
+    ]
+  },
+  "i have class on monday eee": {
+    "text": "i have class on monday eee",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  },
+  "i have eee class on mon day": {
+    "text": "i have eee class on mon day",
+    "question": "I'm not sure what you mean. Could you clarify?",
+    "options": [
+      "Yes, add it",
+      "No, cancel",
+      "Just information"
+    ]
+  }
+}
