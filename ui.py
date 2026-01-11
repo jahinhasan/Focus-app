@@ -2042,8 +2042,7 @@ class FocusApp(ctk.CTk):
             target_sec = pom.get("work", 25) * 60
             if self.timer_seconds >= target_sec:
                 self.pomodoro_target_reached = True
-                self.sound_mgr.play("success") 
-                # Visual cue
+                # Visual cue only since sound feature removed
                 self.timer_lbl.configure(text_color=COLORS["success"])
                 if getattr(self, "zen_active", False):
                     self.zen_lbl.configure(text_color=COLORS["success"])

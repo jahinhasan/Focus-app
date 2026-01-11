@@ -1,3 +1,7 @@
-PySide6>=6.5
-dateparser>=1.1
-python-dateutil>=2.8
+customtkinter==5.2.2
+pillow==10.2.0
+tkcalendar==1.6.1
+groq==0.4.2
+darkdetect==0.8.0
+pip-search>=2.3.2
+requests>=2.31.0

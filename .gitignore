@@ -1,10 +1,43 @@
+# Python
 __pycache__/
-*.pyc
-.venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
 venv/
+.venv/
+ENV/
+
+# Local Data
+data.json
+skillbook.json
 .env
+
+# Tooling/IDEs
+.vscode/
+.idea/
+.qodo/
 .DS_Store
-# data.json is often user specific, but user might want to keep it? 
-# Usually we ignore actual data. I'll ask user? No, standard is ignore.
-# But for this one-shot project user might want it.
-# I will NOT ignore data.json for now as it holds the state user tested.
+
+# Temporary
+*.bak
+*.tmp
+temp_uploads/

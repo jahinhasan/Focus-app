@@ -1,11 +1,72 @@
-Focus App — minimal MVP
+# 🎯 Focus Dashboard
 
-Install:
-python -m pip install -r requirements.txt
+A modern, high-performance productivity application built with Python and CustomTkinter. Designed for students and professionals to manage tasks, track routines, and maintain focus with a gamified experience.
 
-Run:
-python main.py
+![App Header](assets/screenshot_placeholder.png) *(Add your screenshot here!)*
 
-Notes:
-- Use "Import Routine" to paste messy routine text.
-- Parsed entries with low confidence are marked "Needs review".
+## ✨ Key Features
+
+-   **🚀 Gamified Progress**: Earn XP for every task completed and class attended. Level up to unlock new themes and features!
+-   **📅 Smart Routine**: Automatically parses your class schedule and populates your daily view. No manual entry needed for recurring classes.
+-   **⏳ Pomodoro & Stopwatch**: flexible timer system with auto-flow (Focus -> Break) and Zen Mode for minimal distraction.
+-   **📊 Visual Analytics**: GitHub-style activity heatmap to track your consistency over the year.
+-   **📂 Subject Vault**: Organize documents, notes, and subtasks by subject in a clean, categorized view.
+-   **🤖 Hybrid AI Assistant**: Natural language parsing for adding tasks and classes, powered by a rule-based logic with optional LLM integration.
+-   **⚡ Industrial Automation**: 
+    -   Daily schedule auto-resets.
+    -   Stale task auto-archiving.
+    -   Proactive attendance prompts when classes end.
+
+## 🛠️ Technology Stack
+
+-   **Language**: Python 3.10+
+-   **UI Framework**: [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) (Modern translucent UI)
+-   **Data Storage**: JSON (Local-first, privacy-focused)
+-   **AI Engine**: Regex-based Intent Authority + Optional Groq API integration.
+
+## 🚀 Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/jahinhasan/Focus-app.git
+   cd Focus-app
+   ```
+
+2. **Create a virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the application**:
+   ```bash
+   python main.py
+   ```
+
+## 📖 Usage
+
+-   **Sidebar**: Navigate between Today, Routine, History, Vault, and the XP Store.
+-   **Timer**: Click the timer display to switch between Countdown and Stopwatch modes.
+-   **Zen Mode**: Use the button at the bottom of the sidebar to enter a focused, minimal timer view.
+-   **AI Chat**: Type naturally like "Add math homework for tomorrow" or "What classes do I have today?".
+
+## 📂 Project Structure
+
+- `main.py`: Entry point.
+- `ui.py`: All UI components and view logic.
+- `logic.py`: Core business logic and data management.
+- `ai_parser.py`: Natural language understanding engine.
+- `ace_integration.py`: Lightweight stats and pattern learning.
+- `file_parser.py`: Document extraction for routine uploads.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+*Built with ❤️ for focused minds.*
