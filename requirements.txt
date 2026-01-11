@@ -7,4 +7,3 @@ requests>=2.31.0
 pypdf==3.17.4
 python-docx==1.1.0
 pytesseract==0.3.10
-pip-search>=2.3.2

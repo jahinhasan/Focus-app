@@ -55,6 +55,13 @@ A modern, high-performance productivity application built with Python and Custom
 -   **Zen Mode**: Use the button at the bottom of the sidebar to enter a focused, minimal timer view.
 
 
+## 📦 Deployment & Releases
+
+This project is configured with **GitHub Actions** to automatically build and package the application for **Windows (.exe)** and **Linux**.
+
+- **Download**: Check the [Releases](https://github.com/jahinhasan/Focus-app/releases) tab for the latest standalone binaries.
+- **Manual Build**: If you want to build locally, ensure `pyinstaller` is installed and run: `pyinstaller FocusApp.spec`.
+
 ## 📂 Project Structure
 
 - `main.py`: Entry point.

@@ -2,9 +2,9 @@ import os
 import mimetypes
 
 try:
-    import PyPDF2
+    import pypdf
 except ImportError:
-    PyPDF2 = None
+    pypdf = None
 
 try:
     import docx
@@ -49,13 +49,13 @@ class FileParser:
             raise ValueError(f"Unsupported file format: {ext}")
 
     def _parse_pdf(self, path):
-        if not PyPDF2:
-            raise ImportError("PyPDF2 not installed")
+        if not pypdf:
+            raise ImportError("pypdf not installed")
         
         text = []
         try:
             with open(path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 for page in reader.pages:
                     text.append(page.extract_text())
         except Exception as e:
