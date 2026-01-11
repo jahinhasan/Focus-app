@@ -74,20 +74,64 @@ FONTS = {
 }
 
 class TimePicker(ctk.CTkFrame):
+    """Improved time picker with side-by-side spinbox-like behavior."""
     def __init__(self, parent, initial="09:00"):
         super().__init__(parent, fg_color="transparent")
-        h, m = initial.split(":")
+        try:
+            h, m = initial.split(":")
+        except:
+            h, m = "09", "00"
+            
         self.hour_var = ctk.StringVar(value=h)
         self.min_var = ctk.StringVar(value=m)
 
-        ctk.CTkOptionMenu(self, variable=self.hour_var, width=60,
-                          values=[f"{i:02}" for i in range(24)]).pack(side="left", padx=2)
-        ctk.CTkLabel(self, text=":").pack(side="left")
-        ctk.CTkOptionMenu(self, variable=self.min_var, width=60,
-                          values=[f"{i:02}" for i in range(0, 60, 5)]).pack(side="left", padx=2)
+        # Hours
+        ctk.CTkLabel(self, text="H:", font=FONTS["tiny"]).pack(side="left", padx=2)
+        self.h_menu = ctk.CTkOptionMenu(self, variable=self.hour_var, width=65, height=28,
+                          values=[f"{i:02}" for i in range(24)], dynamic_resizing=False)
+        self.h_menu.pack(side="left", padx=2)
+        
+        # Separator
+        ctk.CTkLabel(self, text=":", font=FONTS["subheader"]).pack(side="left")
+        
+        # Minutes
+        ctk.CTkLabel(self, text="M:", font=FONTS["tiny"]).pack(side="left", padx=2)
+        self.m_menu = ctk.CTkOptionMenu(self, variable=self.min_var, width=65, height=28,
+                          values=[f"{i:02}" for i in range(0, 60, 5)], dynamic_resizing=False)
+        self.m_menu.pack(side="left", padx=2)
 
     def get(self):
         return f"{self.hour_var.get()}:{self.min_var.get()}"
+
+class DaySelector(ctk.CTkFrame):
+    """Multi-select toggle buttons for days of the week."""
+    def __init__(self, parent, initial_days=None):
+        super().__init__(parent, fg_color="transparent")
+        self.days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        self.selected_days = {d: ctk.BooleanVar(value=(d in initial_days) if initial_days else False) for d in self.days}
+        self.buttons = {}
+        
+        for d in self.days:
+            btn = ctk.CTkButton(
+                self, text=d.upper(), width=40, height=32,
+                fg_color=COLORS["card"] if not self.selected_days[d].get() else COLORS["accent"],
+                text_color=COLORS["text"] if not self.selected_days[d].get() else "white",
+                hover_color=COLORS["accent"],
+                command=lambda day=d: self.toggle_day(day)
+            )
+            btn.pack(side="left", padx=2)
+            self.buttons[d] = btn
+
+    def toggle_day(self, day):
+        val = not self.selected_days[day].get()
+        self.selected_days[day].set(val)
+        if val:
+            self.buttons[day].configure(fg_color=COLORS["accent"], text_color="white")
+        else:
+            self.buttons[day].configure(fg_color=COLORS["card"], text_color=COLORS["text"])
+
+    def get(self):
+        return [d for d, var in self.selected_days.items() if var.get()]
 
 # ==================== COMPONENTS ====================
 
@@ -488,16 +532,16 @@ class TodayView(ctk.CTkScrollableFrame):
     def prompt_add_class(self):
         top = ctk.CTkToplevel(self)
         top.title("New Class")
-        top.geometry("400x550")
+        top.geometry("450x550")
         top.after(100, lambda: top.focus())
 
         ctk.CTkLabel(top, text="Class Name / Subject:", font=FONTS["body"]).pack(pady=(10, 0))
-        title_e = ctk.CTkEntry(top, width=300)
+        title_e = ctk.CTkEntry(top, width=350)
         title_e.pack(pady=5)
 
-        ctk.CTkLabel(top, text="Days (e.g. mon, wed, fri):", font=FONTS["body"]).pack(pady=(5, 0))
-        days_e = ctk.CTkEntry(top, width=300)
-        days_e.pack(pady=5)
+        ctk.CTkLabel(top, text="Select Days:", font=FONTS["body"]).pack(pady=(5, 0))
+        day_sel = DaySelector(top)
+        day_sel.pack(pady=5)
 
         ctk.CTkLabel(top, text="Start Time:", font=FONTS["body"]).pack(pady=(10, 0))
         start_p = TimePicker(top, "09:00")
@@ -509,9 +553,8 @@ class TodayView(ctk.CTkScrollableFrame):
 
         def save():
             title = title_e.get().strip()
-            days_str = days_e.get().strip()
-            if title and days_str:
-                days = [d.strip().lower()[:3] for d in days_str.split(",")]
+            days = day_sel.get()
+            if title and days:
                 sch = {"days": days, "start": start_p.get(), "end": end_p.get()}
                 new_task = add_task_logic(self.app.data, title, category="class", days=days, schedule=sch, subject=title)
                 # Silently add the new class card if it's for today
@@ -521,7 +564,7 @@ class TodayView(ctk.CTkScrollableFrame):
                     self.draw_task_card(new_task)
             top.destroy()
 
-        ctk.CTkButton(top, text="Add Class", command=save, fg_color=COLORS["accent"]).pack(pady=20)
+        ctk.CTkButton(top, text="Add Class", command=save, fg_color=COLORS["accent"], height=40).pack(pady=20)
 
     def confirm_delete(self, task_id):
         if messagebox.askyesno("Delete", "Are you sure you want to delete this?"):
@@ -662,6 +705,276 @@ class TodayView(ctk.CTkScrollableFrame):
             note_lbl.pack(anchor="w", padx=10, pady=(8, 4))
             card._note_lbl = note_lbl
 
+class ModernFileSelector(ctk.CTkToplevel):
+    """A premium, card-based gallery selector for an ultra-modern experience."""
+    def __init__(self, parent, on_file_selected):
+        super().__init__(parent)
+        self.title("Routine Scanner")
+        self.geometry("800x650")
+        self.on_file_selected = on_file_selected
+        self.configure(fg_color=COLORS["bg"])
+        
+        # Safe lifecycle management
+        self.transient(parent)
+        try: self.grab_set()
+        except: pass
+        
+        self.images = [] # Keep refs to prevent GC
+        self.render()
+        self.after(100, lambda: self.focus())
+
+    def find_recent_images(self):
+        """Find recent images in common folders."""
+        import os
+        paths = [
+            os.path.expanduser("~/Downloads"),
+            os.path.expanduser("~/Pictures"),
+            os.path.expanduser("~/Desktop"),
+            os.getcwd()
+        ]
+        found = []
+        for p in paths:
+            if os.path.exists(p) and os.path.isdir(p):
+                try:
+                    for f in os.listdir(p):
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            full_path = os.path.join(p, f)
+                            if os.path.isfile(full_path):
+                                found.append(full_path)
+                except Exception as e:
+                    print(f"Error listing {p}: {e}")
+        
+        # Sort by modification time safely
+        def get_mtime_safe(x):
+            try: return os.path.getmtime(x)
+            except: return 0
+            
+        found.sort(key=get_mtime_safe, reverse=True)
+        return found[:15]
+
+    def render(self):
+        # Header
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=40, pady=(30, 5))
+        
+        ctk.CTkLabel(header, text="✨ Routine Scanner", font=FONTS["title"], text_color=COLORS["accent"]).pack(side="left")
+        ctk.CTkLabel(header, text="Select or Browse", font=FONTS["small"], text_color=COLORS["text_dim"]).pack(side="right", pady=(10, 0))
+
+        # Folder Filters
+        filter_frame = ctk.CTkFrame(self, fg_color="transparent")
+        filter_frame.pack(fill="x", padx=40, pady=(10, 10))
+        
+        folders = [("Downloads", "~/Downloads"), ("Pictures", "~/Pictures"), ("Project", "."), ("Desktop", "~/Desktop")]
+        for name, path in folders:
+            btn = ctk.CTkButton(filter_frame, text=name, width=80, height=26, corner_radius=15,
+                                fg_color=COLORS["card"], text_color=COLORS["text"],
+                                font=FONTS["tiny"], hover_color=COLORS["accent"],
+                                command=lambda p=path: self.refresh_gallery(p))
+            btn.pack(side="left", padx=5)
+
+        # Gallery Section
+        self.gallery_container = ctk.CTkScrollableFrame(self, orientation="horizontal", height=220, fg_color="transparent")
+        self.gallery_container.pack(fill="x", padx=40)
+        
+        self.refresh_gallery() # Initial load
+
+        # Drop Zone / Browse
+        browse_card = ctk.CTkFrame(self, fg_color=COLORS["sidebar"], corner_radius=15, border_width=1, border_color=COLORS["border"])
+        browse_card.pack(fill="x", padx=40, pady=20)
+        
+        ctk.CTkLabel(browse_card, text="Can't find it in the gallery? Use the system browser.", 
+                     font=FONTS["small"]).pack(pady=(15, 5))
+        
+        btn_browse = ctk.CTkButton(browse_card, text="📁 Open File Browser", height=36, width=180,
+                                   fg_color=COLORS["card"], border_width=1, border_color=COLORS["accent"],
+                                   corner_radius=10, font=FONTS["small"],
+                                   command=self.open_system_picker)
+        btn_browse.pack(pady=(0, 15))
+
+    def refresh_gallery(self, filter_path=None):
+        """Update gallery with images from filters or all recents."""
+        for child in self.gallery_container.winfo_children():
+            child.destroy()
+        
+        self.images = [] # Clear old refs
+        
+        import os
+        if filter_path:
+            full_path = os.path.expanduser(filter_path) if filter_path.startswith("~") else os.path.abspath(filter_path)
+            recents = []
+            if os.path.exists(full_path):
+                try:
+                    for f in os.listdir(full_path):
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            recents.append(os.path.join(full_path, f))
+                except: pass
+            recents.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            recents = recents[:15]
+        else:
+            recents = self.find_recent_images()
+
+        if not recents:
+            ctk.CTkLabel(self.gallery_container, text="No images found here.", 
+                         font=FONTS["small"], text_color=COLORS["text_dim"]).pack(pady=80, padx=250)
+        
+        for img_path in recents:
+            self.draw_image_card(self.gallery_container, img_path)
+
+    def draw_image_card(self, parent, path):
+        """Draw a thumbnail card for an image."""
+        import os
+        from PIL import Image
+        
+        fname = os.path.basename(path)
+        card = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=12, width=160, height=200)
+        card.pack(side="left", padx=10)
+        card.pack_propagate(False)
+        
+        try:
+            pil_img = Image.open(path)
+            pil_img.thumbnail((140, 120))
+            img = ctk.CTkImage(light_image=pil_img, size=pil_img.size)
+            self.images.append(img) # Keep alive
+            
+            img_lbl = ctk.CTkLabel(card, image=img, text="")
+            img_lbl.pack(pady=(10, 5))
+            # Bind click
+            img_lbl.bind("<Button-1>", lambda e: self.select_and_close(path))
+            card.bind("<Button-1>", lambda e: self.select_and_close(path))
+        except Exception as e:
+            ctk.CTkLabel(card, text="🖼️", font=("Inter", 32)).pack(pady=(40, 10))
+            print(f"Error loading thumbnail {path}: {e}")
+
+        name_lbl = ctk.CTkLabel(card, text=fname[:15] + "..." if len(fname) > 15 else fname, 
+                                font=FONTS["tiny"], text_color=COLORS["text_dim"])
+        name_lbl.pack()
+        
+        btn = ctk.CTkButton(card, text="Select", height=24, fg_color="transparent", 
+                            border_width=1, border_color=COLORS["accent"], font=FONTS["tiny"],
+                            command=lambda: self.select_and_close(path))
+        btn.pack(pady=10)
+
+    def select_and_close(self, path):
+        self.on_file_selected(path)
+        self.destroy()
+
+    def open_system_picker(self):
+        from tkinter import filedialog
+        try: self.grab_release()
+        except: pass
+        file_path = filedialog.askopenfilename(parent=self, title="Locate Routine Image",
+                                                filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp")])
+        if file_path:
+            self.select_and_close(file_path)
+        else:
+            try: self.grab_set()
+            except: pass
+
+class RoutineReviewDialog(ctk.CTkToplevel):
+    """Modern dialog to review and edit extracted routine classes."""
+    def __init__(self, parent, extracted_classes, on_confirm):
+        super().__init__(parent)
+        self.title("Verify Routine Classes")
+        self.geometry("700x800")
+        self.on_confirm = on_confirm
+        self.class_data = extracted_classes
+        self.cards = []
+        
+        self.render()
+        self.after(100, lambda: self.focus())
+
+    def render(self):
+        # Clear existing
+        for w in self.winfo_children(): w.destroy()
+        
+        # Header
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkLabel(header, text="✨ Review Extracted Classes", font=FONTS["header"]).pack(side="left")
+        ctk.CTkLabel(header, text=f"{len(self.class_data)} Found", font=FONTS["small"], 
+                     text_color=COLORS["accent"]).pack(side="right")
+
+        # Scrollable area
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color=COLORS["sidebar"])
+        self.scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        if not self.class_data:
+            ctk.CTkLabel(self.scroll, text="No classes detected in this image.", font=FONTS["body"]).pack(pady=50)
+
+        for i, class_item in enumerate(self.class_data):
+            self.draw_review_card(i, class_item)
+
+        # Footer
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkButton(footer, text="Discard", fg_color=COLORS["card"], 
+                      text_color=COLORS["error"], command=self.destroy).pack(side="left", padx=10)
+        
+        ctk.CTkButton(footer, text="Import All Classes", fg_color=COLORS["accent"],
+                      height=45, font=FONTS["subheader"],
+                      command=self.confirm).pack(side="right", expand=True, fill="x", padx=10)
+
+    def draw_review_card(self, index, data):
+        card = ctk.CTkFrame(self.scroll, fg_color=COLORS["card"], corner_radius=10)
+        card.pack(fill="x", pady=10, padx=5)
+        
+        top_row = ctk.CTkFrame(card, fg_color="transparent")
+        top_row.pack(fill="x", padx=15, pady=(10, 5))
+        
+        name_var = ctk.StringVar(value=data.get("title", "Class"))
+        ctk.CTkEntry(top_row, textvariable=name_var, font=FONTS["subheader"], 
+                     width=350, border_width=0, fg_color="transparent").pack(side="left")
+        
+        ctk.CTkButton(top_row, text="✕", width=24, height=24, fg_color="transparent",
+                      text_color=COLORS["text_dim"], hover_color=COLORS["error"],
+                      command=lambda i=index: self.remove_card(i)).pack(side="right")
+
+        mid_row = ctk.CTkFrame(card, fg_color="transparent")
+        mid_row.pack(fill="x", padx=15, pady=5)
+        
+        day_sel = DaySelector(mid_row, initial_days=data.get("days", []))
+        day_sel.pack(side="left")
+
+        bot_row = ctk.CTkFrame(card, fg_color="transparent")
+        bot_row.pack(fill="x", padx=15, pady=(5, 10))
+        
+        ctk.CTkLabel(bot_row, text="⏰", font=FONTS["body"]).pack(side="left", padx=(0, 5))
+        start_p = TimePicker(bot_row, data.get("start", "09:00"))
+        start_p.pack(side="left", padx=5)
+        
+        ctk.CTkLabel(bot_row, text="to", font=FONTS["small"]).pack(side="left", padx=5)
+        end_p = TimePicker(bot_row, data.get("end", "10:30"))
+        end_p.pack(side="left", padx=5)
+        
+        # Store refs for confirm
+        self.cards.append({
+            "name_var": name_var,
+            "day_sel": day_sel,
+            "start_p": start_p,
+            "end_p": end_p,
+            "card_widget": card,
+            "active": True
+        })
+
+    def remove_card(self, index):
+        self.cards[index]["card_widget"].destroy()
+        self.cards[index]["active"] = False
+
+    def confirm(self):
+        final_list = []
+        for c in self.cards:
+            if c.get("active", True):
+                final_list.append({
+                    "title": c["name_var"].get(),
+                    "days": c["day_sel"].get(),
+                    "start": c["start_p"].get(),
+                    "end": c["end_p"].get()
+                })
+        self.on_confirm(final_list)
+        self.destroy()
+
 class RoutineView(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent, fg_color=COLORS["bg"])
@@ -767,55 +1080,51 @@ class RoutineView(ctk.CTkFrame):
         
         top = ctk.CTkToplevel(self)
         top.title(f"Edit: {task['title']}")
-        top.geometry("400x350")
+        top.geometry("450x450")
         top.after(100, lambda: top.focus())
         
         sch = task.get("schedule", {})
         
         ctk.CTkLabel(top, text="Class Name:", font=FONTS["body"]).pack(pady=(15, 5))
-        name_e = ctk.CTkEntry(top, width=300)
+        name_e = ctk.CTkEntry(top, width=350)
         name_e.insert(0, task["title"])
         name_e.pack(pady=5)
         
-        ctk.CTkLabel(top, text="Days (e.g., sun, mon, tue):", font=FONTS["body"]).pack(pady=(10, 5))
-        days_e = ctk.CTkEntry(top, width=300)
-        days_e.insert(0, ", ".join(sch.get("days", [])))
-        days_e.pack(pady=5)
+        ctk.CTkLabel(top, text="Select Days:", font=FONTS["body"]).pack(pady=(10, 5))
+        day_sel = DaySelector(top, initial_days=sch.get("days", []))
+        day_sel.pack(pady=5)
         
         ctk.CTkLabel(top, text="Start Time:", font=FONTS["body"]).pack(pady=(10, 5))
-        start_e = ctk.CTkEntry(top, width=300)
-        start_e.insert(0, sch.get("start", "09:00"))
-        start_e.pack(pady=5)
+        start_p = TimePicker(top, sch.get("start", "09:00"))
+        start_p.pack(pady=5)
         
         ctk.CTkLabel(top, text="End Time:", font=FONTS["body"]).pack(pady=(10, 5))
-        end_e = ctk.CTkEntry(top, width=300)
-        end_e.insert(0, sch.get("end", "10:30"))
-        end_e.pack(pady=5)
+        end_p = TimePicker(top, sch.get("end", "10:30"))
+        end_p.pack(pady=5)
         
         def save():
             new_title = name_e.get().strip()
-            days_str = days_e.get().strip()
-            new_days = [d.strip().lower()[:3] for d in days_str.split(",")]
-            new_start = start_e.get().strip()
-            new_end = end_e.get().strip()
+            new_days = day_sel.get()
+            new_start = start_p.get()
+            new_end = end_p.get()
+            
+            if not new_title or not new_days:
+                messagebox.showwarning("Error", "Name and at least one day required.")
+                return
             
             # Update data
+            old_days = sch.get("days", [])
             task["title"] = new_title
             task["schedule"] = {"days": new_days, "start": new_start, "end": new_end}
             save_data(self.app.data)
             
-            # Silent Update
-            # If days changed, we must re-draw the cards
-            old_days = sch.get("days", [])
+            # Silent Update UI
             if set(new_days) != set(old_days):
-                # Remove all old cards
                 self.delete_class_silent_ui_only(class_id)
-                # Draw new cards
                 for day in new_days:
                     if day in self.day_containers:
                         self._draw_class_card(self.day_containers[day], task)
             else:
-                # Just update labels in place
                 if class_id in self.class_cards:
                     for card in self.class_cards[class_id]:
                         if hasattr(card, "_title_lbl"): card._title_lbl.configure(text=new_title[:10])
@@ -823,7 +1132,7 @@ class RoutineView(ctk.CTkFrame):
             
             top.destroy()
         
-        ctk.CTkButton(top, text="Save", fg_color=COLORS["success"], command=save).pack(pady=15)
+        ctk.CTkButton(top, text="Save Changes", fg_color=COLORS["success"], command=save, height=40).pack(pady=20)
     
     def delete_class_silent(self, class_id):
         """Delete a class silently without full refresh (removes all cards)."""
@@ -842,19 +1151,30 @@ class RoutineView(ctk.CTkFrame):
         """Show dialog to paste and import schedule."""
         top = ctk.CTkToplevel(self)
         top.title("Import Weekly Schedule")
-        top.geometry("650x550")
+        top.geometry("650x600")
         top.after(100, lambda: top.focus())
         
-        ctk.CTkLabel(top, text="📥 Paste your schedule (any format!):", font=FONTS["header"]).pack(pady=(15, 5))
+        ctk.CTkLabel(top, text="📥 Import your schedule", font=FONTS["header"]).pack(pady=(15, 5))
         ctk.CTkLabel(top, text="AI will automatically detect classes, days, and times", 
                      font=FONTS["small"], text_color=COLORS["text_dim"]).pack(pady=(0, 5))
         
+        # Option Frame for Buttons
+        btn_frame = ctk.CTkFrame(top, fg_color="transparent")
+        btn_frame.pack(pady=10)
+
+        ctk.CTkButton(btn_frame, text="📷 Import from Image", fg_color=COLORS["card"],
+                      hover_color=COLORS["card_hover"], height=36,
+                      command=lambda: self.import_from_image(top, status_lbl)).pack(side="left", padx=5)
+
+        # Space for paste
+        ctk.CTkLabel(top, text="OR Paste Text Below:", font=FONTS["small"], text_color=COLORS["text_dim"]).pack(pady=(10, 0))
+
         # Option to clear existing
         clear_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(top, text="Clear existing classes before import", 
                         variable=clear_var, font=FONTS["small"]).pack(pady=5)
         
-        txt = ctk.CTkTextbox(top, font=FONTS["body"], height=320)
+        txt = ctk.CTkTextbox(top, font=FONTS["body"], height=250)
         txt.pack(fill="both", expand=True, padx=20, pady=10)
         
         # Status label
@@ -869,6 +1189,10 @@ class RoutineView(ctk.CTkFrame):
                 self.render()  # Clear UI immediately
             
             content = txt.get("1.0", "end-1c")
+            if not content.strip():
+                messagebox.showwarning("Error", "Please paste some text first!")
+                return
+
             status_lbl.configure(text="🔄 Parsing with AI...")
             top.update()
             
@@ -876,13 +1200,65 @@ class RoutineView(ctk.CTkFrame):
             top.destroy()
             if count > 0:
                 messagebox.showinfo("Success", f"✅ Imported {count} classes!")
-                # self.render() removed - updates are now dynamic
             else:
                 messagebox.showwarning("No Classes Found", "Could not detect any classes. Try a clearer format.")
         
-        ctk.CTkButton(top, text="🤖 Import with AI", fg_color=COLORS["accent"],
+        ctk.CTkButton(top, text="🤖 Import Text with AI", fg_color=COLORS["accent"],
                       hover_color=COLORS["accent_dark"], height=40,
                       command=parse_and_import).pack(pady=15)
+
+    def import_from_image(self, top_window, status_lbl):
+        """Handle image selection via ModernFileSelector and OCR import."""
+        
+        def on_file_picked(file_path):
+            if not file_path: return
+            
+            # Use top_window for status update
+            try:
+                import os
+                if os.environ.get("GEMINI_API_KEY"):
+                    status_lbl.configure(text="✨ AI Visual Analysis (Gemini Flash)...", text_color=COLORS["accent"])
+                else:
+                    status_lbl.configure(text="📷 Reading image (OCR + Groq)...", text_color=COLORS["text_dim"])
+                top_window.update()
+            except: pass
+
+            try:
+                from ai_parser import parse_file_with_ai
+                result = parse_file_with_ai(file_path)
+                
+                if result.get("intent") == "schedule_file" and "classes" in result:
+                    classes = result["classes"]
+                    try: top_window.destroy() 
+                    except: pass
+
+                    def handle_final_import(final_classes):
+                        count = 0
+                        for c in final_classes:
+                            if c["title"].strip() and c["days"]:
+                                self._add_or_update_class(
+                                    c["title"],
+                                    c["days"],
+                                    c["start"],
+                                    c["end"]
+                                )
+                                count += 1
+                        messagebox.showinfo("Success", f"✅ Successfully imported {count} classes to your routine!")
+
+                    # Open the modern Review Dialog
+                    RoutineReviewDialog(self.winfo_toplevel(), classes, handle_final_import)
+                else:
+                    msg = result.get("message", "No clear schedule found in image.")
+                    try: status_lbl.configure(text="❌ Import failed.")
+                    except: pass
+                    messagebox.showwarning("Import Failed", msg)
+            except Exception as e:
+                try: status_lbl.configure(text="❌ Error processing image.")
+                except: pass
+                messagebox.showerror("Error", f"Failed to process image: {str(e)}")
+
+        # Open the Modern File Selector
+        ModernFileSelector(self.winfo_toplevel(), on_file_picked)
 
     def parse_schedule_ai(self, text):
         """Parse schedule using AI - format free!"""
@@ -961,33 +1337,32 @@ class RoutineView(ctk.CTkFrame):
         """Quick add single class."""
         top = ctk.CTkToplevel(self)
         top.title("Add Class")
-        top.geometry("400x400")
+        top.geometry("450x520")
         top.after(100, lambda: top.focus())
         
         ctk.CTkLabel(top, text="Class Name:", font=FONTS["body"]).pack(pady=(15, 5))
-        name_e = ctk.CTkEntry(top, width=300)
+        name_e = ctk.CTkEntry(top, width=350)
         name_e.pack(pady=5)
         
-        ctk.CTkLabel(top, text="Days (e.g., mon, wed, fri):", font=FONTS["body"]).pack(pady=(10, 5))
-        days_e = ctk.CTkEntry(top, width=300)
-        days_e.pack(pady=5)
+        ctk.CTkLabel(top, text="Select Days:", font=FONTS["body"]).pack(pady=(10, 5))
+        day_sel = DaySelector(top)
+        day_sel.pack(pady=5)
         
-        ctk.CTkLabel(top, text="Start Time (HH:MM):", font=FONTS["body"]).pack(pady=(10, 5))
-        start_e = ctk.CTkEntry(top, width=300, placeholder_text="09:00")
-        start_e.pack(pady=5)
+        ctk.CTkLabel(top, text="Start Time:", font=FONTS["body"]).pack(pady=(10, 5))
+        start_p = TimePicker(top, "09:00")
+        start_p.pack(pady=5)
         
-        ctk.CTkLabel(top, text="End Time (HH:MM):", font=FONTS["body"]).pack(pady=(10, 5))
-        end_e = ctk.CTkEntry(top, width=300, placeholder_text="10:30")
-        end_e.pack(pady=5)
+        ctk.CTkLabel(top, text="End Time:", font=FONTS["body"]).pack(pady=(10, 5))
+        end_p = TimePicker(top, "10:30")
+        end_p.pack(pady=5)
         
         def save():
             name = name_e.get().strip()
-            days_str = days_e.get().strip()
-            start = start_e.get().strip() or "09:00"
-            end = end_e.get().strip() or "10:30"
+            days = day_sel.get()
+            start = start_p.get()
+            end = end_p.get()
             
-            if name and days_str:
-                days = [d.strip().lower()[:3] for d in days_str.split(",")]
+            if name and days:
                 new_class = add_task_logic(
                     self.app.data,
                     title=name,
@@ -995,7 +1370,6 @@ class RoutineView(ctk.CTkFrame):
                     schedule={"days": days, "start": start, "end": end},
                     subject=name
                 )
-                # Silent add
                 if new_class:
                     for day in days:
                         if day in self.day_containers:
@@ -1003,7 +1377,7 @@ class RoutineView(ctk.CTkFrame):
             top.destroy()
         
         ctk.CTkButton(top, text="Add Class", fg_color=COLORS["accent"],
-                      command=save).pack(pady=20)
+                      command=save, height=40).pack(pady=20)
 
 class HistoryView(ctk.CTkFrame):
     def __init__(self, parent, app):

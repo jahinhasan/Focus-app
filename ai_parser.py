@@ -10,13 +10,22 @@ from file_parser import FileParser
 from datetime import datetime, timedelta
 from logic import load_data, get_today_tasks, get_weekly_class_tasks, get_level_progress
 from ace_integration import record_query, learn_schedule_patterns
+from dotenv import load_dotenv
+
+# Load environment variables early
+load_dotenv()
 
 
-# Try to import Groq for AI capabilities
+# Note: Groq is kept as a local/fast fallback
 try:
     from groq import Groq
 except ImportError:
     Groq = None
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 # ==================== UTILITIES ====================
 class RoutineNormalizer:
@@ -91,14 +100,31 @@ class SmartParser:
         self.file_parser = FileParser()
         self.normalizer = RoutineNormalizer()
         
-        # Initialize Groq client if API key available
-        api_key = os.environ.get("GROQ_API_KEY")
+        # Groq client (Secondary fallback)
+        groq_key = os.environ.get("GROQ_API_KEY")
         self.client = None
-        if Groq and api_key:
-            try:
-                self.client = Groq(api_key=api_key)
-            except Exception as e:
-                print(f"Groq Init Error: {e}")
+        if Groq and groq_key:
+            try: self.client = Groq(api_key=groq_key)
+            except: pass
+        
+        # Gemini client (Primary - V9.0 Flash)
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if genai and gemini_key:
+            try: self.gemini_client = genai.Client(api_key=gemini_key)
+            except: self.gemini_client = None
+        else:
+            self.gemini_client = None
+
+    def _clean_title(self, title):
+        """Strip room numbers in brackets [306], teacher initials (Ra), etc."""
+        if not title: return "Class"
+        # Remove [anything]
+        title = re.sub(r'\[.*?\]', '', title)
+        # Remove (anything)
+        title = re.sub(r'\(.*?\)', '', title)
+        # Remove trailing/leading junk
+        title = title.replace('  ', ' ').strip()
+        return title if title else "Class"
 
     def _get_enhanced_system_prompt(self) -> str:
         """Get enhanced system prompt with user context."""
@@ -160,6 +186,25 @@ For query intent, use this action mapping:
 - "stats" → User's level, XP, productivity stats
 """
 
+    def _call_gemini_vision(self, image_path, prompt):
+        """Native image analysis via Gemini Flash (Stable Quota Path)."""
+        if not self.gemini_client: return None
+        
+        try:
+            from PIL import Image
+            img = Image.open(image_path)
+            
+            # Using stable alias to ensure working quota on free tier
+            response = self.gemini_client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=[prompt, img],
+                config={'response_mime_type': 'application/json'}
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            print(f"Gemini Vision Error: {e}")
+            return None
+
     def _call_groq(self, text: str, system_instruction: str = None) -> dict:
         """Call Groq API for intelligent parsing/chat."""
         if not self.client:
@@ -175,8 +220,8 @@ For query intent, use this action mapping:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": text}
                 ],
-                temperature=0.3,  # Slightly higher for more conversational responses
-                max_tokens=512,
+                temperature=0.2, 
+                max_tokens=2048, # Boosted for exhaustive lists
                 response_format={"type": "json_object"}
             )
             return json.loads(completion.choices[0].message.content)
@@ -185,57 +230,76 @@ For query intent, use this action mapping:
             return None
 
     def parse_file(self, file_path: str) -> dict:
-        """Parse a file and extract schedule/task info."""
+        """Parse a file using the best available engine (Gemini Flash -> Groq Fallback)."""
+        is_image = file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))
+        
+        vision_prompt = (
+            "You are an elite academic routine parser with perfect vision. Extract the university class schedule from this image. "
+            "CRITICAL RULES:\n"
+            "1. EXHAUSTIVE: You must find EVERY SINGLE class mentioned in the image. Do not skip any cell.\n"
+            "2. CLEAN TITLES: Remove room numbers [306] and initials (RA). Only keep the Course Code/Name.\n"
+            "3. SMART SPLITTING: If one cell has two classes (e.g. CSE2203 & 2202), create two separate objects.\n"
+            "4. DAYS/TIME: Normalize days to lowercase (sun, mon, etc.) and times to HH:MM.\n"
+            "Output JSON: {'intent': 'schedule_file', 'classes': [{'title': '...', 'days': [...], 'start': '...', 'end': '...'}]}"
+        )
+
+        # --- STRATEGY A: GEMINI 1.5 FLASH (Elite & Cost-Effective) ---
+        if is_image and self.gemini_client:
+            ai_result = self._call_gemini_vision(file_path, vision_prompt)
+            if ai_result and ai_result.get("intent") == "schedule_file":
+                return self._finalize_routine_result(ai_result)
+
+        # --- STRATEGY B: GROQ + OCR (Robust Fallback) ---
         try:
             raw_text = self.file_parser.extract_text(file_path)
         except Exception as e:
             return {"intent": "chat", "message": f"❌ Error reading file: {str(e)}"}
 
-        # Try AI extraction first for files
         if self.client:
-            system_prompt = (
-                "Extract class schedule from this text. "
-                "Output JSON: {'intent': 'schedule_file', 'classes': [{'title': '...', 'days': ['mon'], 'start': 'HH:MM', 'end': 'HH:MM'}], 'message': 'Summary'}. "
-                "If no routine found, return {'intent': 'chat', 'message': 'No routine found.'}."
+            # --- PASS 1: SURVEY (Identify all classes) ---
+            survey_prompt = (
+                "Identify EVERY SINGLE class mentioned in this OCR text. "
+                "Output JSON: {'classes_found': ['Class Name 1', 'Class Name 2', ...]}"
             )
-            ai_result = self._call_groq(raw_text, system_prompt)
-            if ai_result:
-                # Learning hook: schedule patterns from AI result (if any)
-                try:
-                    if ai_result.get("intent") == "schedule_file":
-                        learn_schedule_patterns(ai_result.get("classes", []))
-                        record_query("schedule_file", {"count": len(ai_result.get("classes", []))})
-                except Exception:
-                    pass
-                return ai_result
+            survey_result = self._call_groq(raw_text, survey_prompt)
+            class_list = survey_result.get("classes_found", []) if survey_result else []
+            class_list_str = ", ".join(class_list) if class_list else "all detected classes"
 
-        # Local fallback: Universal Regex Logic
+            # --- PASS 2: DETAIL EXTRACTION ---
+            detail_prompt = (
+                f"Extract full details for: {class_list_str}. "
+                "Normalize days to lowercase and times to HH:MM. Output JSON: {'intent': 'schedule_file', 'classes': [{...}]}"
+            )
+            ai_result = self._call_groq(raw_text, detail_prompt)
+            if ai_result and ai_result.get("intent") == "schedule_file":
+                return self._finalize_routine_result(ai_result)
+
+        # --- STRATEGY C: LOCAL FALLBACK (Regex) ---
         lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
         found_classes = []
-        
         for line in lines:
             match = self._parse_line_universally(line)
-            if match:
-                found_classes.append(match)
+            if match: found_classes.append(match)
 
         if found_classes:
-            # Learning hook: update patterns from offline file parse
-            try:
-                learn_schedule_patterns(found_classes)
-                record_query("schedule_file", {"count": len(found_classes)})
-            except Exception:
-                pass
+            learn_schedule_patterns(found_classes)
             return {
                 "intent": "schedule_file",
                 "classes": found_classes,
-                "needs_clarification": False,
-                "message": f"I analyzed the file and found {len(found_classes)} classes (Offline Mode)."
+                "message": f"Found {len(found_classes)} classes (Offline Mode)."
             }
             
-        return {
-            "intent": "chat",
-            "message": "I couldn't detect a clear schedule. Try taking a clearer picture or ensuring 'Day' and 'Time' are visible."
-        }
+        return {"intent": "chat", "message": "I couldn't detect a clear schedule. Try a clearer picture."}
+
+    def _finalize_routine_result(self, ai_result):
+        """Clean and record successful AI routine results."""
+        try:
+            for c in ai_result.get("classes", []):
+                c["title"] = self._clean_title(c.get("title", ""))
+            learn_schedule_patterns(ai_result.get("classes", []))
+            record_query("schedule_file", {"count": len(ai_result.get("classes", []))})
+        except Exception: pass
+        return ai_result
 
     def _parse_line_universally(self, line):
         """
