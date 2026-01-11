@@ -53,7 +53,7 @@ A modern, high-performance productivity application built with Python and Custom
 -   **Sidebar**: Navigate between Today, Routine, History, Vault, and the XP Store.
 -   **Timer**: Click the timer display to switch between Countdown and Stopwatch modes.
 -   **Zen Mode**: Use the button at the bottom of the sidebar to enter a focused, minimal timer view.
--   **AI Chat**: Type naturally like "Add math homework for tomorrow" or "What classes do I have today?".
+
 
 ## 📂 Project Structure
 
@@ -64,9 +64,6 @@ A modern, high-performance productivity application built with Python and Custom
 - `ace_integration.py`: Lightweight stats and pattern learning.
 - `file_parser.py`: Document extraction for routine uploads.
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 *Built with ❤️ for focused minds.*
