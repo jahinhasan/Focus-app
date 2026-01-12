@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
+
 import 'logic_port.dart';
 import 'store_screen.dart';
 import 'settings_screen.dart';
@@ -15,9 +15,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _parser = MobileAIParser(
-      apiKey: utf8.decode(base64
-          .decode("QUl6YVN5QmFLSVk3ZDBxNnJWaGZOLU43bWE5Q1hWbDZ0LU11UFdv")));
+  final _parser = MobileAIParser();
 
   Future<void> _generateAI(Map<String, dynamic> task) async {
     // Show loading indicator or toast? For now just simple async.
