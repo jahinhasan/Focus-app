@@ -11,7 +11,7 @@ class MobileAIParser {
 
   MobileAIParser({this.apiKey}) {
     // HARDCORE API KEY - Updated per user request
-    const String hardcoreKey = "AIzaSyC4qYFPi-TWbOo_bh8NFYx-jifZPoW7lfo";
+    const String hardcoreKey = "AIzaSyBLHdt-gq6TkcUYj4msgU1-cza8T3yYpkk";
 
     _model = GenerativeModel(
       model: 'gemini-1.5-flash',

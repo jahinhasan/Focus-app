@@ -15,7 +15,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _parser =
-      MobileAIParser(apiKey: "AIzaSyC4qYFPi-TWbOo_bh8NFYx-jifZPoW7lfo");
+      MobileAIParser(apiKey: "AIzaSyBLHdt-gq6TkcUYj4msgU1-cza8T3yYpkk");
 
   Future<void> _generateAI(Map<String, dynamic> task) async {
     // Show loading indicator or toast? For now just simple async.
