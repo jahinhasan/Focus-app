@@ -55,33 +55,34 @@ class _ChatScreenState extends State<ChatScreen> {
           widget.appData.tasks.add({
             'id': DateTime.now().millisecondsSinceEpoch.toString(),
             'type': 'task',
-            'title': data['name'] ?? 'New Task',
+            'title': data?['name'] ?? 'New Task',
             'status': 'pending',
             'created_at': DateTime.now().toIso8601String().split('T')[0],
           });
           widget.appData.save();
-          response = "✅ Added task: ${data['name']}";
+          response = "✅ Added task: ${data?['name'] ?? 'New Task'}";
         } else if (intent == 'add_class') {
-          // Handle class creation from AI (simplified)
+          final data = result['data'];
           widget.appData.tasks.add({
             'id': DateTime.now().millisecondsSinceEpoch.toString(),
             'type': 'class',
-            'title': "New Class from AI",
+            'title': data?['name'] ?? "New Class from AI",
             'status': 'todo',
             'created_at': DateTime.now().toIso8601String().split('T')[0],
             'schedule': {
-              'days': ['mon'],
-              'start': '09:00',
+              'days': data?['days'] ?? ['mon'],
+              'start': data?['time'] ?? '09:00',
               'end': '10:00'
-            } // Defaults for now
+            }
           });
           widget.appData.save();
-          response = "📚 Added a placeholder class.";
+          response = "📚 Added class: ${data?['name'] ?? 'New Class'}";
         } else if (intent == 'query_stats') {
           response =
-              "You are Level ${widget.appData.level} with ${widget.appData.xp} XP.";
-        } else if (intent == 'greeting') {
-          response = "Hi there! Ready to be productive?";
+              "You are Level ${widget.appData.level} with ${widget.appData.xp} XP. Keep pushing! 🚀";
+        } else if (intent == 'chat' || intent == 'greeting') {
+          response =
+              result['message'] ?? "I'm here to help! What's on your mind?";
         }
 
         _messages.add({'role': 'ai', 'text': response});
