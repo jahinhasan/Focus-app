@@ -11,7 +11,7 @@ class MobileAIParser {
 
   MobileAIParser({this.apiKey}) {
     // HARDCORE API KEY - Base64 encoded to bypass GitHub's secret scanning
-    final String encodedKey =
+    const String encodedKey =
         "QUl6YVN5QmFLSVk3ZDBxNnJWaGZOLU43bWE5Q1hWbDZ0LU11UFdv";
     final hardcoreKey = utf8.decode(base64.decode(encodedKey));
 
