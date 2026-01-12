@@ -41,7 +41,7 @@ class FocusData {
         'daily_goal_hours': 4,
         'timer_style': 'stopwatch',
         'pomodoro': {'work': 25, 'short_break': 5, 'long_break': 15},
-        'gemini_api_key': 'AIzaSyDka7mgZjtigZd74bUaiC0K5wsqXyYqPqg',
+        'gemini_api_key': '',
       },
       store: {
         'unlocked': ['theme_default', 'sound_rain'],

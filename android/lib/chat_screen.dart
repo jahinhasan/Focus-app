@@ -26,9 +26,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _parser = MobileAIParser(
-        apiKey: widget.appData.settings['gemini_api_key'] ??
-            "AIzaSyDka7mgZjtigZd74bUaiC0K5wsqXyYqPqg");
+    _parser =
+        MobileAIParser(apiKey: widget.appData.settings['gemini_api_key'] ?? "");
   }
 
   void _sendMessage() async {
