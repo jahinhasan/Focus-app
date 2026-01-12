@@ -16,7 +16,7 @@ class MobileAIParser {
     final hardcoreKey = utf8.decode(base64.decode(encodedKey));
 
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash-latest',
+      model: 'gemini-flash-latest',
       apiKey: hardcoreKey,
       generationConfig: GenerationConfig(responseMimeType: 'application/json'),
     );
