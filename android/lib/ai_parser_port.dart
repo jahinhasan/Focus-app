@@ -10,14 +10,14 @@ class MobileAIParser {
   GenerativeModel? _model;
 
   MobileAIParser({this.apiKey}) {
-    if (apiKey != null) {
-      _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: apiKey!,
-        generationConfig:
-            GenerationConfig(responseMimeType: 'application/json'),
-      );
-    }
+    // HARDCORE API KEY - Updated per user request
+    const String hardcoreKey = "AIzaSyC4qYFPi-TWbOo_bh8NFYx-jifZPoW7lfo";
+
+    _model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: hardcoreKey,
+      generationConfig: GenerationConfig(responseMimeType: 'application/json'),
+    );
   }
 
   /// Main parsing entry point

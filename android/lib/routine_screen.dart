@@ -18,8 +18,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
   @override
   void initState() {
     super.initState();
-    _parser =
-        MobileAIParser(apiKey: widget.appData.settings['gemini_api_key'] ?? "");
+    _parser = MobileAIParser();
   }
 
   @override
