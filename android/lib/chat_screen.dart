@@ -14,6 +14,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late MobileAIParser _parser;
   final List<Map<String, String>> _messages = [
     {
       'role': 'ai',
@@ -22,9 +23,13 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   ];
 
-  // NOTE: Ideally this comes from a secure storage or .env in production
-  final _parser =
-      MobileAIParser(apiKey: "AIzaSyADbnCVjYKb2jBkcHgXMviDWXwWfbhf8tc");
+  @override
+  void initState() {
+    super.initState();
+    _parser = MobileAIParser(
+        apiKey: widget.appData.settings['gemini_api_key'] ??
+            "AIzaSyDka7mgZjtigZd74bUaiC0K5wsqXyYqPqg");
+  }
 
   void _sendMessage() async {
     if (_controller.text.isEmpty) return;

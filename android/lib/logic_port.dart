@@ -40,7 +40,8 @@ class FocusData {
         'theme': 'System',
         'daily_goal_hours': 4,
         'timer_style': 'stopwatch',
-        'pomodoro': {'work': 25, 'short_break': 5, 'long_break': 15}
+        'pomodoro': {'work': 25, 'short_break': 5, 'long_break': 15},
+        'gemini_api_key': 'AIzaSyDka7mgZjtigZd74bUaiC0K5wsqXyYqPqg',
       },
       store: {
         'unlocked': ['theme_default', 'sound_rain'],
@@ -81,7 +82,12 @@ class FocusData {
       xp: json['xp'] ?? 0,
       tasks: List<Map<String, dynamic>>.from(json['tasks'] ?? []),
       history: json['history'] ?? {},
-      settings: json['settings'] ?? {'theme': 'System'},
+      settings: json['settings'] != null
+          ? {
+              ...FocusData.defaultState().settings,
+              ...Map<String, dynamic>.from(json['settings'])
+            }
+          : FocusData.defaultState().settings,
       store: json['store'] ?? {'unlocked': [], 'xp_spent': 0},
       habits: List<Map<String, dynamic>>.from(json['habits'] ?? []),
       subjects: json['subjects'] ?? {},

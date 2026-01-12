@@ -55,6 +55,8 @@ class SettingsScreen extends StatelessWidget {
           _sectionHeader("General"),
           _settingTile(Icons.dark_mode, "Theme", "System Default (Dark)", null),
           _settingTile(Icons.notifications, "Notifications", "Enabled", null),
+          _settingTile(Icons.api_rounded, "Gemini API Key",
+              "Update your AI brain key", () => _editApiKey(context)),
           const SizedBox(height: 30),
           _sectionHeader("Data"),
           _settingTile(Icons.delete_forever, "Reset Data",
@@ -63,8 +65,43 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 30),
           _sectionHeader("About"),
           _settingTile(
-              Icons.info_outline, "Version", "1.0.0 (Flutter Port)", null),
+              Icons.info_outline, "Version", "1.0.1 (Flutter Port)", null),
           _settingTile(Icons.code, "Developer", "Jahin Hasan", null),
+        ],
+      ),
+    );
+  }
+
+  void _editApiKey(BuildContext context) {
+    final controller =
+        TextEditingController(text: appData.settings['gemini_api_key'] ?? "");
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1C2D),
+        title:
+            const Text("Edit API Key", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: "Enter Gemini API Key",
+            hintStyle: TextStyle(color: Colors.white24),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              appData.settings['gemini_api_key'] = controller.text;
+              appData.save();
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text("API Key updated for next session.")));
+            },
+            child: const Text("Save"),
+          )
         ],
       ),
     );

@@ -13,8 +13,15 @@ class RoutineScreen extends StatefulWidget {
 }
 
 class _RoutineScreenState extends State<RoutineScreen> {
-  final _parser =
-      MobileAIParser(apiKey: "AIzaSyADbnCVjYKb2jBkcHgXMviDWXwWfbhf8tc");
+  late MobileAIParser _parser;
+
+  @override
+  void initState() {
+    super.initState();
+    _parser = MobileAIParser(
+        apiKey: widget.appData.settings['gemini_api_key'] ??
+            "AIzaSyDka7mgZjtigZd74bUaiC0K5wsqXyYqPqg");
+  }
 
   @override
   Widget build(BuildContext context) {
