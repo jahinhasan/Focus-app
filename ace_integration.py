@@ -58,22 +58,70 @@ def save_skillbook(book: Dict[str, Any]) -> None:
         pass
 
 
-def record_query(intent: str, payload: Dict[str, Any] | None = None) -> None:
-    """Record a query/intent occurrence to the skillbook."""
+
+def record_query(intent: str, payload: Dict[str, Any] | None = None, query_text: str = None, response_data: Any = None) -> None:
+    """Record a query/intent occurrence and cache the interaction for offline recall."""
     book = load_skillbook()
     q = book.setdefault("stats", {}).setdefault("queries", {})
     q[intent] = q.get(intent, 0) + 1
 
     # Append recent history (capped to 500 entries)
-    book.setdefault("history", []).append({
+    entry = {
         "ts": int(time.time()),
         "intent": intent,
-        "payload": payload or {}
-    })
-    if len(book["history"]) > 500:
-        book["history"] = book["history"][-500:]
+        "payload": payload or {},
+        "query_text": query_text,
+        "response_data": response_data
+    }
+    
+    # Store full interaction for offline learning if both input/output exist
+    if query_text and response_data:
+        interactions = book.setdefault("interactions", [])
+        interactions.append(entry)
+        if len(interactions) > 1000: # Cap knowledge base
+            book["interactions"] = interactions[-1000:]
+
+    history = book.setdefault("history", [])
+    history.append(entry)
+    if len(history) > 500:
+        book["history"] = history[-500:]
 
     save_skillbook(book)
+
+
+def find_similar_interaction(query_text: str, threshold: float = 0.6) -> Dict[str, Any] | None:
+    """Find the most similar past interaction for offline recall."""
+    if not query_text: return None
+    
+    book = load_skillbook()
+    interactions = book.get("interactions", [])
+    if not interactions: return None
+
+    from difflib import SequenceMatcher
+    
+    best_score = 0.0
+    best_match = None
+    
+    query_lower = query_text.lower()
+
+    for entry in interactions:
+        past_query = entry.get("query_text")
+        if not past_query: continue
+        
+        score = SequenceMatcher(None, query_lower, past_query.lower()).ratio()
+        if score > best_score:
+            best_score = score
+            best_match = entry
+
+    if best_score >= threshold:
+        return {
+            "intent": best_match.get("intent", "chat"),
+            "message": best_match.get("response_data", {}).get("message", "I recall this..."),
+            "data": best_match.get("response_data", {}),
+            "offline_score": best_score
+        }
+    
+    return None
 
 
 def learn_schedule_patterns(classes: List[Dict[str, Any]] | None) -> None:

@@ -242,7 +242,7 @@ For query intent, use this action mapping:
     def _call_gemini_chat(self, text: str, history=None) -> dict:
         """Call Gemini for conversational/multimodal interaction with retry logic."""
         if not self.gemini_client:
-            return None
+            return self._offline_recall(text)
             
         import time
         retries = 3
@@ -278,7 +278,17 @@ For query intent, use this action mapping:
                         config=config
                     )
                     
-                return json.loads(response.text)
+                result = json.loads(response.text)
+                
+                # Silent Learning Hook
+                try:
+                    from ace_integration import record_query
+                    record_query(result.get("intent", "chat"), {"message": result.get("message")}, query_text=text, response_data=result)
+                except Exception as e:
+                    print(f"Learning Hook Error: {e}")
+                
+                return result
+
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str or "503" in err_str:
@@ -287,6 +297,19 @@ For query intent, use this action mapping:
                         continue
                 print(f"Gemini Chat Error (Attempt {attempt+1}): {e}")
                 
+        # Fallback to Offline Recall
+        return self._offline_recall(text)
+    
+    def _offline_recall(self, text: str) -> dict:
+        """Attempt to recall a similar past interaction."""
+        try:
+            from ace_integration import find_similar_interaction
+            match = find_similar_interaction(text)
+            if match:
+                print(f"Offline Recall Used ({match['offline_score']:.2f})")
+                return match
+        except Exception as e:
+            print(f"Offline Recall Error: {e}")
         return None
 
     def summarize_document(self, file_path: str) -> str:
@@ -351,6 +374,7 @@ For query intent, use this action mapping:
         if is_image and self.gemini_client:
             ai_result = self._call_gemini_vision(file_path, vision_prompt)
             if ai_result and ai_result.get("intent") == "schedule_file":
+                self._record_routine_learning(ai_result) # Learn hook
                 return self._finalize_routine_result(ai_result)
 
         # --- STRATEGY B: GROQ + OCR (Robust Fallback) ---
@@ -376,6 +400,7 @@ For query intent, use this action mapping:
             )
             ai_result = self._call_groq(raw_text, detail_prompt)
             if ai_result and ai_result.get("intent") == "schedule_file":
+                self._record_routine_learning(ai_result) # Learn hook
                 return self._finalize_routine_result(ai_result)
 
         # --- STRATEGY C: LOCAL FALLBACK (Regex) ---
@@ -390,18 +415,67 @@ For query intent, use this action mapping:
             return {
                 "intent": "schedule_file",
                 "classes": found_classes,
-                "message": f"Found {len(found_classes)} classes (Offline Mode)."
+                "message": f"Found {len(found_classes)} classes (Offline Regex)."
             }
+
+        # --- STRATEGY D: LEARNED PATTERN SCAN (Smart Offline) ---
+        try:
+            from ace_integration import get_top_patterns
+            patterns = get_top_patterns(limit=50) # Get top 50 known titles
+            known_titles = dict(patterns.get("titles", [])) # Convert list of tuples to dict
             
+            learned_classes = []
+            for line in lines:
+                for title in known_titles.keys():
+                    if title.lower() in line.lower():
+                        # Found a known class in this line!
+                        # Try to find time in this line
+                        start, end = self.normalizer.extract_time_range(line)
+                        
+                        # If no time found, try to look at previous/next line? 
+                        # For now, let's just claim it if we find a time.
+                        if start and end:
+                            # Try to find days
+                            found_days = []
+                            for w in line.lower().replace(",", " ").split():
+                                d = self.normalizer.normalize_day(w)
+                                if d: found_days.append(d)
+                            
+                            if found_days:
+                                learned_classes.append({
+                                    "intent": "class",
+                                    "title": title,
+                                    "subject": title,
+                                    "days": list(set(found_days)),
+                                    "start": start,
+                                    "end": end,
+                                    "confidence": 0.8
+                                })
+            
+            if learned_classes:
+                return {
+                    "intent": "schedule_file",
+                    "classes": learned_classes,
+                    "message": f"Found {len(learned_classes)} known classes (Offline Learned Patterns)."
+                }
+        except Exception as e:
+            print(f"Pattern Scan Error: {e}")
+
         return {"intent": "chat", "message": "I couldn't detect a clear schedule. Try a clearer picture."}
+
+    def _record_routine_learning(self, ai_result):
+        """Helper to record routine learning."""
+        try:
+            from ace_integration import learn_schedule_patterns, record_query
+            learn_schedule_patterns(ai_result.get("classes", []))
+            record_query("schedule_file", {"count": len(ai_result.get("classes", []))})
+        except Exception: pass
 
     def _finalize_routine_result(self, ai_result):
         """Clean and record successful AI routine results."""
         try:
             for c in ai_result.get("classes", []):
                 c["title"] = self._clean_title(c.get("title", ""))
-            learn_schedule_patterns(ai_result.get("classes", []))
-            record_query("schedule_file", {"count": len(ai_result.get("classes", []))})
         except Exception: pass
         return ai_result
 

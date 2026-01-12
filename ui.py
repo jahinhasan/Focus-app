@@ -2326,8 +2326,27 @@ class FocusApp(ctk.CTk):
         self.timer_mode = saved_state.get("mode", "focus")
         self.active_class_id = saved_state.get("class_id", None)
         
-        self.timer_running = False # Always start paused
+        self.timer_running = False # Initial state
         self.last_tick = None
+
+        if saved_state.get("is_running"):
+            try:
+                last_tick_iso = saved_state.get("last_tick")
+                if last_tick_iso:
+                    last_tick_dt = datetime.fromisoformat(last_tick_iso)
+                    elapsed_since_closed = (datetime.now() - last_tick_dt).total_seconds()
+                    
+                    style = self.data.get("settings", {}).get("timer_style", "stopwatch")
+                    if style == "stopwatch":
+                        self.timer_seconds += elapsed_since_closed
+                    else: # Countdown
+                        self.timer_seconds -= elapsed_since_closed
+                        if self.timer_seconds < 0: self.timer_seconds = 0
+                    
+                    # Auto-start if it was running
+                    self.after(500, self.start_timer)
+            except Exception as e:
+                print(f"Error resuming timer: {e}")
 
         # Layout
         self.grid_columnconfigure(1, weight=1)
@@ -2686,12 +2705,16 @@ class FocusApp(ctk.CTk):
         if self.timer_mode_lbl.cget("text") != lbl and "Class" not in self.timer_mode_lbl.cget("text"):
              self.timer_mode_lbl.configure(text=lbl)
              
+        # Save persistence
+        update_timer_state(self.data, self.timer_seconds, self.timer_mode, self.active_class_id, is_running=True)
+             
         self.update_timer()
 
     def pause_timer(self):
         self.timer_running = False
         self.last_tick = None
         self.timer_ctrl.configure(text="▶ Resume", fg_color=COLORS["success"])
+        update_timer_state(self.data, self.timer_seconds, self.timer_mode, self.active_class_id, is_running=False)
 
     def stop_timer(self, log=False):
         self.timer_running = False

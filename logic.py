@@ -141,19 +141,21 @@ def log_focus_time(data, minutes):
     save_data(data)
     save_data(data)
 
-def update_timer_state(data, seconds, mode="focus", class_id=None):
+def update_timer_state(data, seconds, mode="focus", class_id=None, is_running=False):
     """Save the current timer state for persistence."""
     data["timer_state"] = {
         "seconds": seconds,
         "mode": mode,
         "class_id": class_id,
+        "is_running": is_running,
+        "last_tick": datetime.now().isoformat() if is_running else None,
         "updated_at": str(datetime.now())
     }
     save_data(data)
 
 def clear_timer_state(data):
     """Reset timer persistence."""
-    data["timer_state"] = {"seconds": 0, "mode": "focus", "class_id": None}
+    data["timer_state"] = {"seconds": 0, "mode": "focus", "class_id": None, "is_running": False, "last_tick": None}
     save_data(data)
 # ==================== TASK FACTORY ====================
 def create_task(*, title, task_type="task", subject=None, schedule=None, date=None, days=None, notes="", duration=None):
