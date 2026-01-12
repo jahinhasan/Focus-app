@@ -75,8 +75,6 @@ class FocusData {
       percentage: percentage.clamp(0.0, 1.0),
     );
   }
-}
-
   // ==================== AUTOMATION ====================
 
   /// Runs daily maintenance (Reset classes, auto-archive tasks)

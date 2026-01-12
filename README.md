@@ -1,76 +1,99 @@
 # 🎯 Focus Dashboard
 
-A modern, high-performance productivity application built with Python and CustomTkinter. Designed for students and professionals to manage tasks, track routines, and maintain focus with a gamified experience.
+**The Ultimate Productivity Command Center** for high-achievers. Built with **Python** & **CustomTkinter** for desktop, with a **Flutter** companion app in development.
 
-![App Header](assets/screenshot_placeholder.png) *(Add your screenshot here!)*
+Focus Dashboard combines professional task management, automated routine tracking, and gamification into a single, beautiful "Dark Mode" interface. It's designed to keep you in the "Flow" state.
+
+![App Header](https://via.placeholder.com/800x400.png?text=Focus+Dashboard+Preview) *(Replace with actual screenshot)*
 
 ## ✨ Key Features
 
--   **🚀 Gamified Progress**: Earn XP for every task completed and class attended. Level up to unlock new themes and features!
--   **📅 Smart Routine**: Automatically parses your class schedule and populates your daily view. No manual entry needed for recurring classes.
--   **⏳ Pomodoro & Stopwatch**: flexible timer system with auto-flow (Focus -> Break) and Zen Mode for minimal distraction.
--   **📊 Visual Analytics**: GitHub-style activity heatmap to track your consistency over the year.
--   **📂 Subject Vault**: Organize documents, notes, and subtasks by subject in a clean, categorized view.
--   **🤖 Hybrid AI Assistant**: Natural language parsing for adding tasks and classes, powered by a rule-based logic with optional LLM integration.
--   **⚡ Industrial Automation**: 
-    -   Daily schedule auto-resets.
-    -   Stale task auto-archiving.
-    -   Proactive attendance prompts when classes end.
+### 🖥️ Dashboard ("Today's Flow")
+-   **Aggregated View**: See your personal tasks and class schedule in one timeline.
+-   **Smart Persistence**: Tasks from the past (overdue) stick around until you crush them.
+-   **Optional Deadlines**: Create "Backlog" tasks without dates for low-stress tracking.
+-   **Subtasks**: Break down complex projects with nested checklists.
+
+### 📅 AI-Powered Routine
+-   **Gemini 1.5 Flash Integration**: Upload a screenshot of your class schedule, and the AI parses it instantly.
+-   **Auto-Recurring**: Classes automatically appear on your dashboard on the correct days.
+-   **Attendance Tracking**: Mark classes as Attended/Missed to build your stats.
+
+### 🚀 Gamification (Focus Warrior)
+-   **XP System**: Earn XP for every task, subtask, and class.
+-   **Level Up**: Climb the ranks from Novice to Focus Master.
+-   **Streaks**: Build momentum by completing tasks daily.
+
+### 📂 Subject Vault
+-   **Organized Storage**: distinct folders for each class or project.
+-   **File Management**: Upload homework, readings, and notes directly to the vault.
+
+### ⏳ Pro Timer
+-   **Dual Modes**: Countdown (Pomodoro) and Stopwatch (Deep Work).
+-   **Zen Mode**: A distraction-free timer window.
+
+---
 
 ## 🛠️ Technology Stack
 
--   **Language**: Python 3.10+
--   **UI Framework**: [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) (Modern translucent UI)
--   **Data Storage**: JSON (Local-first, privacy-focused)
--   **AI Engine**: Regex-based Intent Authority + Optional Groq API integration.
-
-## 🚀 Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/jahinhasan/Focus-app.git
-   cd Focus-app
-   ```
-
-2. **Create a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the application**:
-   ```bash
-   python main.py
-   ```
-
-## 📖 Usage
-
--   **Sidebar**: Navigate between Today, Routine, History, Vault, and the XP Store.
--   **Timer**: Click the timer display to switch between Countdown and Stopwatch modes.
--   **Zen Mode**: Use the button at the bottom of the sidebar to enter a focused, minimal timer view.
-
-
-## 📦 Deployment & Releases
-
-This project is configured with **GitHub Actions** to automatically build and package the application for **Windows (.exe)** and **Linux**.
-
-- **Download**: Check the [Releases](https://github.com/jahinhasan/Focus-app/releases) tab for the latest standalone binaries.
-- **Manual Build**: If you want to build locally, ensure `pyinstaller` is installed and run: `pyinstaller FocusApp.spec`.
-
-## 📂 Project Structure
-
-- `main.py`: Entry point.
-- `ui.py`: All UI components and view logic.
-- `logic.py`: Core business logic and data management.
-- `ai_parser.py`: Natural language understanding engine.
-- `ace_integration.py`: Lightweight stats and pattern learning.
-- `file_parser.py`: Document extraction for routine uploads.
-
+-   **Core**: Python 3.10+
+-   **UI Framework**: [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) (Modern, High DPI)
+-   **AI**: Google Gemini 1.5 Flash (via API)
+-   **Data**: Local-first JSON storage (Privacy focused)
+-   **Mobile**: Dart / Flutter (See `android/` folder)
 
 ---
+
+## 🚀 Installation & Setup
+
+### Prerequisites
+-   Python 3.10 or higher
+-   A Google Cloud API Key (for Gemini features)
+
+### Quick Start
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/jahinhasan/Focus-app.git
+    cd Focus-app
+    ```
+
+2.  **Set up Virtual Environment**:
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # Linux/Mac
+    # .venv\Scripts\activate   # Windows
+    ```
+
+3.  **Install Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configure API Key**:
+    -   Create a `.env` file in the root directory.
+    -   Add your key: `GOOGLE_API_KEY=your_key_here`
+
+5.  **Run the App**:
+    ```bash
+    python main.py
+    ```
+
+---
+
+## 📱 Mobile Version (Android/iOS)
+
+This repository includes a **Flutter** port of the logic and UI, located in the `android/` folder.
+To build the mobile app:
+
+1.  Navigate to the `android/` directory.
+2.  Follow the [**Android Setup Guide**](android/README.md).
+3.  Open the project in **Android Studio** to compile.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please open an issue for feature requests or submit a Pull Request.
+
+**License**: MIT
 *Built with ❤️ for focused minds.*

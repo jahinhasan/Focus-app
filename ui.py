@@ -506,19 +506,39 @@ class TodayView(ctk.CTkScrollableFrame):
     def prompt_add_task(self):
         top = ctk.CTkToplevel(self)
         top.title("New Task")
-        top.geometry("450x450")
+        top.geometry("450x650")
         top.after(100, lambda: top.focus())
 
         ctk.CTkLabel(top, text="Task Title:", font=FONTS["body"]).pack(pady=(10, 0))
         title_e = ctk.CTkEntry(top, width=350)
         title_e.pack(pady=5)
 
-        ctk.CTkLabel(top, text="Select Date:", font=FONTS["body"]).pack(pady=(10, 0))
-        cal = Calendar(top, selectmode='day', date_pattern='yyyy-mm-dd',
+        # Date Schedule Option
+        date_var = ctk.BooleanVar(value=True)
+        
+        # Frame for Calendar so we can show/hide it cleanly
+        cal_container = ctk.CTkFrame(top, fg_color="transparent")
+        
+        def toggle_date():
+            if date_var.get():
+                cal_container.pack(pady=10, after=switch_frame)
+            else:
+                cal_container.pack_forget()
+
+        switch_frame = ctk.CTkFrame(top, fg_color="transparent")
+        switch_frame.pack(pady=5)
+        
+        switch = ctk.CTkSwitch(switch_frame, text="Schedule for Date", variable=date_var, command=toggle_date, font=FONTS["body"])
+        switch.pack()
+
+        # Pack the container initially
+        cal_container.pack(pady=10)
+
+        cal = Calendar(cal_container, selectmode='day', date_pattern='yyyy-mm-dd',
                        background=get_color_str("card"), foreground="white",
                        headersbackground=get_color_str("sidebar"), normalbackground=get_color_str("card"),
                        selectbackground=get_color_str("accent"))
-        cal.pack(pady=10)
+        cal.pack()
 
         ctk.CTkLabel(top, text="Time Limit (minutes, optional):", font=FONTS["body"]).pack(pady=(5, 0))
         dur_e = ctk.CTkEntry(top, width=350, placeholder_text="e.g. 30")
@@ -529,10 +549,21 @@ class TodayView(ctk.CTkScrollableFrame):
             if title:
                 dur = None
                 if dur_e.get().isdigit(): dur = int(dur_e.get())
-                date = cal.get_date()
+                
+                date = None
+                if date_var.get():
+                    date = cal.get_date()
+                
                 new_task = add_task_logic(self.app.data, title, duration=dur, deadline=date)
-                # Silently add the new task card if it's for today
-                if new_task and new_task.get("date") == today():
+                
+                from utils import today
+                today_str = today()
+                
+                should_show = False
+                if not date: should_show = True
+                elif date <= today_str: should_show = True
+                
+                if new_task and should_show:
                     self.draw_task_card(new_task)
             top.destroy()
 

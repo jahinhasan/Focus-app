@@ -41,3 +41,4 @@ skillbook.json
 *.bak
 *.tmp
 temp_uploads/
+agentic-context-engine/

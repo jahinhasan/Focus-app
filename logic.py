@@ -503,9 +503,9 @@ def get_today_tasks(data):
 
     for task in data.get("tasks", []):
         if task["type"] == "task" or task.get("type") == "personal":
-            # Personal tasks show if no date or today
+            # Personal tasks show if no date, today, or past (overdue)
             task_date = task.get("date")
-            if task_date is None or task_date == today_date:
+            if task_date is None or task_date <= today_date:
                 today_tasks.append(task)
 
         elif task["type"] == "class":

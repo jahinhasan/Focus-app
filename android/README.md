@@ -1,29 +1,61 @@
-# 🚀 Focus Dashboard: Android Studio Setup
+# 📱 Focus Dashboard: Mobile Edition
 
-Since you've chosen to build with **Android Studio**, you are using the industry-standard path for high-quality mobile apps.
+This folder contains the **Flutter (Dart)** source code for the Focus Dashboard mobile app.
+Follow these steps to initialize the project and build it in **Android Studio**.
 
-## 🛠️ Phase 1: Preparation
-1.  **Install Flutter SDK**: Make sure you have the [Flutter SDK installed](https://docs.flutter.dev/get-started/install).
-2.  **Android Studio Plugin**: Go to **Settings > Plugins** and install the **Flutter** and **Dart** plugins.
+## 🛠️ Prerequisites
 
-## 🏗️ Phase 2: Create the Project
-1.  Open Android Studio.
-2.  Select **"New Flutter Project"**.
-3.  Name it `focus_app`.
-4.  Specify the project location: `/home/jahinhasan/jahin/projects/focus_dashboard/android/focus_app`.
+1.  **Flutter SDK**: [Install Flutter](https://docs.flutter.dev/get-started/install).
+2.  **Android Studio**: Install with the **Flutter** and **Dart** plugins enabled.
+3.  **Android SDK**: Ensure you have the Android SDK Command-line Tools installed (via Android Studio SDK Manager).
 
-## 📦 Phase 3: Move the Logic
-I have already prepared the code for you! 
-Once the project is created, copy these files into your new project's `lib/` folder:
+## 🚀 Setup Instructions
 
-1.  **[`logic_port.dart`](../logic_port.dart)**: This is your core XP and task logic.
-2.  **[`main.dart`](../main.dart)**: This is the entry point that connects the logic to the UI.
+Since this repository tracks the source files but might not be a fully initialized Flutter project root (to keep the repo clean), follow these steps to generate the build files:
 
-## 📱 Phase 4: Run it!
-1.  Connect your Android phone via USB (with Developer Mode and USB Debugging ON).
-2.  In Android Studio, select your device from the dropdown at the top.
-3.  Press the **Green Run Arrow** (or `Shift + F10`).
+### Step 1: Initialize Flutter Project
+Open your terminal in this `android/` folder and run:
+
+```bash
+# Initialize a new Flutter project in the current directory
+flutter create --project-name=focus_app .
+```
+
+*Note: The `.` tells Flutter to use the current directory. If it complains about existing files, you might need to create a new folder, but usually, it works or you can create a `mobile` folder next to it.*
+
+**Alternative (Cleanest Method):**
+1.  Go up one level: `cd ..`
+2.  Create a new flutter project: `flutter create mobile_app`
+3.  Copy the `.dart` files from `android/` into `mobile_app/lib/`.
+4.  Copy the dependencies from `android/pubspec.yaml` to `mobile_app/pubspec.yaml`.
+
+### Step 2: Install Dependencies
+If you initialized in place, ensure your `pubspec.yaml` has the required packages (see `pubspec.yaml` in this folder). Then run:
+
+```bash
+flutter pub get
+```
+
+### Step 3: Open in Android Studio
+1.  Open **Android Studio**.
+2.  Select **Open** and choose the folder containing `pubspec.yaml`.
+3.  Wait for Gradle sync to finish.
+
+### Step 4: Run
+1.  Connect your physical Android device or start an Emulator.
+2.  Click the green **Run** (▶️) button.
 
 ---
 
-**Next steps**: I can help you build the detailed **Task Cards** and the **Circular Focus Timer** UI in Dart once you have the project open!
+## 📂 Key Files
+
+-   **`main.dart`**: Entry point. Sets up the theme and navigation.
+-   **`dashboard.dart`**: The main "Today" view with task lists and XP progress.
+-   **`logic_port.dart`**: The core business logic (XP, Levels, Automation) ported from Python.
+-   **`vault_screen.dart`**: File and subject management.
+-   **`timer_screen.dart`**: Focus timer implementation.
+
+## ⚠️ Notes for Developers
+
+-   This is a **port** of the Python logic. Changes in `logic.py` (Python) should be manually mirrored to `logic_port.dart` (Dart).
+-   The current version uses local shared preferences. Future updates will sync with a cloud backend.
