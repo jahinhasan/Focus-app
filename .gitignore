@@ -42,3 +42,8 @@ skillbook.json
 *.tmp
 temp_uploads/
 agentic-context-engine/
+
+# Agent backups & corrupt-file recovery dumps (may contain personal data)
+backups/
+data.json.corrupt-*
+skillbook.json.corrupt-*

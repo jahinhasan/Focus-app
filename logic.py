@@ -8,10 +8,11 @@ import uuid
 import math
 from datetime import date, datetime, timedelta
 from utils import today
+import storage
 
 # ==================== PATH SAFE ====================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "data.json")
+DATA_FILE = storage.DATA_FILE
 
 # ==================== LOAD / SAVE ====================
 def load_data():
@@ -24,13 +25,32 @@ def load_data():
             "history": {},
             "focus_sessions": {}
         }
+        data, _, _ = storage.migrate_data(data, backup=False)
         save_data(data)
         return data
 
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        # Corrupt file: keep a recovery copy and start a fresh store so the
+        # app still opens. The corrupt file is never overwritten silently.
+        try:
+            recovery = DATA_FILE + ".corrupt-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            os.replace(DATA_FILE, recovery)
+        except OSError:
+            recovery = None
+        data = {
+            "level": 1, "xp": 0, "tasks": [],
+            "history": {}, "focus_sessions": {}
+        }
+        data, _, _ = storage.migrate_data(data, backup=False)
+        save_data(data)
+        print(f"WARNING: data.json was unreadable; moved to {recovery}")
+        return data
 
     # Migrations & Validation
+    data, _, _ = storage.migrate_data(data)
     data.setdefault("level", 1)
     data.setdefault("xp", 0)
     data.setdefault("tasks", [])
@@ -139,7 +159,6 @@ def log_focus_time(data, minutes):
     update_history(data, 0)  # Ensure entry exists
     data["history"][date_key]["focus_minutes"] = data["history"][date_key].get("focus_minutes", 0) + minutes
     save_data(data)
-    save_data(data)
 
 def update_timer_state(data, seconds, mode="focus", class_id=None, is_running=False):
     """Save the current timer state for persistence."""
@@ -158,10 +177,11 @@ def clear_timer_state(data):
     data["timer_state"] = {"seconds": 0, "mode": "focus", "class_id": None, "is_running": False, "last_tick": None}
     save_data(data)
 # ==================== TASK FACTORY ====================
-def create_task(*, title, task_type="task", subject=None, schedule=None, date=None, days=None, notes="", duration=None):
+def create_task(*, title, task_type="task", subject=None, schedule=None, date=None, days=None, notes="", duration=None,
+                importance=2, difficulty=2, priority_hint=None, goal_id=None, recurrence=None, due_time=None):
     """
     Create a new task.
-    
+
     Args:
         title: Task title
         task_type: "task" (personal) or "class"
@@ -171,7 +191,10 @@ def create_task(*, title, task_type="task", subject=None, schedule=None, date=No
         days: List of days ['mon', 'wed'] for classes (alternative to schedule)
         notes: User notes/link storage
         duration: Optional time limit in minutes
-    
+        importance: 1 low .. 3 high (v3)
+        difficulty: 1 easy .. 3 hard (v3)
+        priority_hint: advisory 0-100 (v3)
+
     Returns:
         Task dict
     """
@@ -185,6 +208,12 @@ def create_task(*, title, task_type="task", subject=None, schedule=None, date=No
         "days": days,  # For classes: list of days
         "notes": notes,
         "duration": duration,
+        "importance": importance if importance in (1, 2, 3) else 2,
+        "difficulty": difficulty if difficulty in (1, 2, 3) else 2,
+        "priority_hint": priority_hint,
+        "goal_id": goal_id,
+        "recurrence": recurrence,
+        "due_time": due_time,
         "status": "pending",
         "subtasks": [],
         "documents": [],
@@ -194,10 +223,11 @@ def create_task(*, title, task_type="task", subject=None, schedule=None, date=No
     }
 
 # ==================== TASK CRUD ====================
-def add_task_logic(data, title, category="task", deadline=None, days=None, schedule=None, notes="", duration=None, subject=None):
+def add_task_logic(data, title, category="task", deadline=None, days=None, schedule=None, notes="", duration=None, subject=None,
+                   importance=2, difficulty=2, priority_hint=None, goal_id=None, recurrence=None, due_time=None):
     """
     Add a new task.
-    
+
     Args:
         data: The data dict
         title: Task title
@@ -208,6 +238,7 @@ def add_task_logic(data, title, category="task", deadline=None, days=None, sched
         notes: User notes
         duration: Time limit in minutes
         subject: Optional subject name
+        importance/difficulty/priority_hint/goal_id/recurrence/due_time: v3 fields
     """
     if not title or not title.strip():
         return None
@@ -220,9 +251,15 @@ def add_task_logic(data, title, category="task", deadline=None, days=None, sched
         days=days,
         notes=notes,
         duration=duration,
-        subject=subject
+        subject=subject,
+        importance=importance,
+        difficulty=difficulty,
+        priority_hint=priority_hint,
+        goal_id=goal_id,
+        recurrence=recurrence,
+        due_time=due_time,
     )
-    
+
     data.setdefault("tasks", []).append(new_task)
     save_data(data)
     return new_task
@@ -246,14 +283,45 @@ def complete_task_logic(data, task_id):
     """Mark a task as done and award XP."""
     task = next((t for t in data.get("tasks", []) if t["id"] == task_id), None)
     if not task: return
-    
+
     if task.get("type") == "class":
         mark_class_done(data, task_id)
     else:
         task["status"] = "done"
+        task["completed_at"] = datetime.now().isoformat()
+        task["updated_at"] = today()
         add_xp(data, 10)
-    
+        update_streak(data)
+
     save_data(data)
+
+def reopen_task_logic(data, task_id):
+    """Reopen a completed task (clears completion metadata, no XP refund)."""
+    task = next((t for t in data.get("tasks", []) if t["id"] == task_id), None)
+    if not task or task.get("type") == "class":
+        return False
+    task["status"] = "pending"
+    task["completed_at"] = None
+    task["actual_minutes"] = None
+    task["updated_at"] = today()
+    save_data(data)
+    return True
+
+def record_actual_duration(data, task_id, minutes):
+    """Attach measured actual focus time (minutes) to a task."""
+    task = get_task_by_id(data, task_id)
+    if not task:
+        return False
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return False
+    if minutes <= 0 or minutes > 24 * 60:
+        return False
+    task["actual_minutes"] = minutes
+    task["updated_at"] = today()
+    save_data(data)
+    return True
 
 def add_subtask(data, task_id, title):
     """Add a subtask to a task."""
@@ -409,53 +477,99 @@ def process_daily_automation(data):
     """
     Run daily automated maintenance:
     1. Reset recurring classes for today (if they were done previous weeks).
-    2. Archive completed tasks from > 1 day ago.
+    2. Archive completed tasks from > 1 day ago into `archived_tasks`
+       (records are PRESERVED for history/estimation - never deleted).
     """
     import datetime
     today_str = str(datetime.date.today())
     today_day = datetime.date.today().strftime("%a").lower()[:3]
-    
+
     tasks = data.get("tasks", [])
     active_tasks = []
-    
+    archived = data.setdefault("archived_tasks", [])
+    archived_ids = {t.get("id") for t in archived if isinstance(t, dict)}
+
     for task in tasks:
+        if not isinstance(task, dict):
+            continue
+
         # 1. Recurring Class Logic
         if task.get("type") == "class":
-            schedule = task.get("schedule", {})
+            schedule = task.get("schedule") or {}
             if today_day in schedule.get("days", []):
                 # Check if it was updated TODAY. If not, reset it to 'todo'
                 last_update = task.get("updated_at", "")
                 if last_update != today_str:
                     task["status"] = "todo"
-                    task["updated_at"] = today_str # Mark as fresh for today
-            
+                    task["updated_at"] = today_str  # Mark as fresh for today
+
             # Classes always stay in the active list (recurring)
             active_tasks.append(task)
-            
-        # 2. Regular Task Logic (Auto-Archive)
+
+        # 2. Regular Task Logic (Auto-Archive, non-destructive)
         else:
             status = task.get("status", "todo")
             updated = task.get("updated_at", "")
-            
-            # If done and from yesterday (or older), archive it is handled by cleanup_finished_classes normally.
-            # But let's enforce a strict "Keep Today's View Clean" policy.
-            # If done and NOT today -> Move to History (implicit via not adding to active_tasks?)
-            # Wait, `active_tasks` replaces `data["tasks"]`.
-            
-            should_archive = False
+
             if status == "done" and updated != today_str:
-                should_archive = True
-            
-            if should_archive:
-                # Add to history if not exists? 
-                # Actually `complete_task_logic` adds XP. The `history` dict logs completed counts daily.
-                # We just remove it from active view.
-                pass 
+                if task.get("id") not in archived_ids:
+                    archived.append(task)
+                    archived_ids.add(task["id"])
             else:
                 active_tasks.append(task)
-                
+
     data["tasks"] = active_tasks
+    # Refresh daily streak against history activity
+    update_streak(data)
     save_data(data)
+
+
+# ==================== STREAK ====================
+def compute_streak(data, ref_date=None):
+    """Count consecutive days with any recorded activity ending today (or yesterday).
+
+    Activity = a day key present in `history`. Returns (current, best).
+    """
+    hist = [d for d in data.get("history", {}).keys()]
+    if not hist:
+        return 0, 0
+    try:
+        days = {date.fromisoformat(d) for d in hist}
+    except ValueError:
+        return 0, 0
+
+    if ref_date is None:
+        ref_date = date.today()
+
+    current = 0
+    cursor = ref_date
+    if cursor not in days:
+        cursor = ref_date - timedelta(days=1)
+    while cursor in days:
+        current += 1
+        cursor -= timedelta(days=1)
+
+    best = 0
+    run = 0
+    for d in sorted(days):
+        if run and (d - prev).days == 1:
+            run += 1
+        else:
+            run = 1
+        best = max(best, run)
+        prev = d
+    return current, best
+
+
+def update_streak(data):
+    """Recompute and persist the streak; returns the current streak."""
+    current, best = compute_streak(data)
+    data["streak"] = current
+    info = data.setdefault("streak_info", {})
+    info["current"] = current
+    info["best"] = max(best, info.get("best", 0))
+    info["updated_at"] = today()
+    return current
 
 # ==================== DAILY CLEANUP ====================
 def cleanup_finished_classes(data):
@@ -691,6 +805,11 @@ def validate_class_input(title, subject, days, start, end):
 
     if not days:
         return False, "At least one day required"
+
+    valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    normalized = [str(d).lower().strip()[:3] for d in days]
+    if any(d not in valid_days for d in normalized):
+        return False, "Days must be mon..sun"
 
     try:
         datetime.strptime(start, "%H:%M")

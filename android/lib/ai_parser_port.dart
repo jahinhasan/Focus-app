@@ -10,16 +10,20 @@ class MobileAIParser {
   GenerativeModel? _model;
 
   MobileAIParser({this.apiKey}) {
-    // HARDCORE API KEY - Base64 encoded to bypass GitHub's secret scanning
-    const String encodedKey =
-        "QUl6YVN5QmFLSVk3ZDBxNnJWaGZOLU43bWE5Q1hWbDZ0LU11UFdv";
-    final hardcoreKey = utf8.decode(base64.decode(encodedKey));
+    // API key comes from the build environment only - never hardcode secrets:
+    //   flutter run --dart-define=GEMINI_API_KEY=<your-key>
+    // When absent, the OfflineBrain handles everything and _model stays null.
+    const String envKey = String.fromEnvironment('GEMINI_API_KEY');
+    final effectiveKey = (apiKey != null && apiKey!.isNotEmpty) ? apiKey : envKey;
 
-    _model = GenerativeModel(
-      model: 'gemini-flash-latest',
-      apiKey: hardcoreKey,
-      generationConfig: GenerationConfig(responseMimeType: 'application/json'),
-    );
+    _model = effectiveKey.isEmpty
+        ? null
+        : GenerativeModel(
+            model: 'gemini-flash-latest',
+            apiKey: effectiveKey,
+            generationConfig:
+                GenerationConfig(responseMimeType: 'application/json'),
+          );
   }
 
   /// Main parsing entry point
