@@ -15,17 +15,14 @@ from focus_agent import extractor as fextract
 from focus_agent import scheduler as fsched
 from focus_agent import subjects as fsubjects
 from focus_agent import goals as fgoals
-from focus_agent import estimator as fest
-from focus_agent import memory as fmemory
 from focus_agent.llm import (
-    get_providers, LLMError, ProviderUnavailable, new_call_id,
+    get_providers, LLMError, new_call_id,
 )
 from focus_agent import tools as ftools
 from focus_agent.schemas import ToolCall, ToolResult
 
 from logic import (
-    get_level_progress, get_today_tasks, format_seconds_to_hms,
-    get_today_focus_stats,
+    get_level_progress, get_today_tasks, get_today_focus_stats,
 )
 
 RESEARCH_HINTS = ("explain", "what is", "how do i", "best way", "resources",

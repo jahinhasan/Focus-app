@@ -22,7 +22,6 @@ from logic import (
     get_heatmap_data, get_store_items, purchase_item, is_unlocked,
     get_pomodoro_settings, update_pomodoro_settings,
     update_timer_state, clear_timer_state, process_daily_automation, # Added automation
-    update_streak, reopen_task_logic
 )
 import subprocess
 import storage
@@ -37,6 +36,7 @@ try:
     from focus_agent import estimator as fest
     from focus_agent import llm as fllm
     from focus_agent import dates as fdates
+    from focus_agent import memory as fmemory
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")

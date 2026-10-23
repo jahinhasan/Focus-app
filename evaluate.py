@@ -31,8 +31,6 @@ from focus_agent import subjects as fsubjects
 from focus_agent import estimator as fest
 from focus_agent import tools as ftools
 from focus_agent.schemas import ToolCall
-from focus_agent.dates import resolve_relative_date
-from focus_agent.llm import LLMError
 
 NOW = datetime(2026, 10, 23, 14, 0)  # fixed reference: a Friday
 SETTINGS = {"study_hours": {"start": "09:00", "end": "22:00"},

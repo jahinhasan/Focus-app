@@ -551,8 +551,9 @@ def compute_streak(data, ref_date=None):
 
     best = 0
     run = 0
+    prev = None
     for d in sorted(days):
-        if run and (d - prev).days == 1:
+        if run and prev is not None and (d - prev).days == 1:
             run += 1
         else:
             run = 1

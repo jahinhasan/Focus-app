@@ -184,7 +184,6 @@ def completion_analytics(data):
     completed = sum(h.get("completed", 0) for h in hist.values())
     totals = sum(h.get("total", 0) for h in hist.values())
     focus = sum(h.get("focus_minutes", 0) for h in hist.values())
-    live_done = sum(1 for t in data.get("tasks", []) if t.get("status") == "done")
     archived = data.get("archived_tasks", [])
     return {
         "completed_total": completed + len(archived),

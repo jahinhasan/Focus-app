@@ -35,6 +35,21 @@ unknown values stay null and are never invented.
 
 ## 🚀 Getting started
 
+### One-command setup (new PC)
+
+Copy the project folder to any PC, then run **one** command:
+
+| OS | Command |
+| :--- | :--- |
+| Windows | double-click `setup.bat` (or run it in cmd) |
+| Linux / macOS | `bash setup.sh` |
+
+The script creates a virtual environment, installs every requirement, checks
+the GUI libraries and Ollama (with exact fix hints if anything is missing),
+and launches the app. Re-running it is always safe.
+
+Manual install, if you prefer:
+
 ### 1. Install the app
 
 ```bash

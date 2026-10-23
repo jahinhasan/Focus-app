@@ -4,7 +4,7 @@
 # user's configured timezone and the current local date - never UTC.
 
 import os
-from datetime import datetime, timedelta, date, time as dtime
+from datetime import datetime, timedelta, date
 try:
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover - py<3.9

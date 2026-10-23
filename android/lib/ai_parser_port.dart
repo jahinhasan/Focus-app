@@ -14,7 +14,8 @@ class MobileAIParser {
     //   flutter run --dart-define=GEMINI_API_KEY=<your-key>
     // When absent, the OfflineBrain handles everything and _model stays null.
     const String envKey = String.fromEnvironment('GEMINI_API_KEY');
-    final effectiveKey = (apiKey != null && apiKey!.isNotEmpty) ? apiKey : envKey;
+    final String effectiveKey =
+        (apiKey != null && apiKey!.isNotEmpty) ? apiKey! : envKey;
 
     _model = effectiveKey.isEmpty
         ? null

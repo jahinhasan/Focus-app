@@ -6,15 +6,12 @@
 # run bounded handler -> explicit ToolResult -> audit log. No shell, no SQL,
 # no eval, no arbitrary file access, no direct DB writes from the model.
 
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from logic import (
     add_task_logic, delete_task_logic, update_task_logic, complete_task_logic,
     reopen_task_logic, record_actual_duration, get_task_by_id, add_subtask,
-    add_subject, rename_subject, save_data, add_xp, get_today_tasks,
-    get_weekly_class_tasks, get_today_focus_stats, get_analytics_data,
-    get_heatmap_data,
+    add_subject, add_xp, get_today_focus_stats, get_analytics_data,
 )
 from focus_agent import dates as fdates
 from focus_agent import subjects as fsubjects
@@ -22,7 +19,7 @@ from focus_agent import scheduler as fsched
 from focus_agent import estimator as fest
 from focus_agent import goals as fgoals
 from focus_agent import memory as fmemory
-from focus_agent.schemas import ToolResult, validate_tool_args, clean_str, valid_date
+from focus_agent.schemas import ToolResult, validate_tool_args, clean_str
 
 
 @dataclass
@@ -605,7 +602,6 @@ def tool_complete_milestone(data, args, ctx):
       {"days": {"type": "int", "min": 1, "max": 90, "default": 7}})
 def tool_get_focus_history(data, args, ctx):
     today_stats = get_today_focus_stats(data)
-    hist = data.get("history", {})
     focus = data.get("focus_sessions", {})
     days = sorted(focus.keys())[-args.get("days", 7):]
     out = [{"date": d,

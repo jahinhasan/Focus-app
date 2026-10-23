@@ -225,7 +225,6 @@ def generate_day_plan(data, date_str, settings=None, now=None,
     - commit: write slots into task['planned'] (only with preserve done first).
     Returns PlanResult.
     """
-    from datetime import datetime as _dt
     settings = settings or (data.get("settings") or {})
     break_min = int(settings.get("break_minutes", 10) or 10)
     tz_now = now or fdates.now_here(settings)
@@ -331,8 +330,6 @@ def generate_day_plan(data, date_str, settings=None, now=None,
     else:
         result.notes.append("No classes scheduled for this weekday")
 
-    planned_total = sum(fdates.hhmm_to_minutes(s.end) - fdates.hhmm_to_minutes(s.start)
-                        for s in slots)
     unsched_need = 0
     for u in unscheduled:
         t = next((c for c in candidates if c["task"]["id"] == u["task_id"]), None)
