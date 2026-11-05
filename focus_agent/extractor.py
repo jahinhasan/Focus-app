@@ -46,10 +46,11 @@ def detect_intent(text):
             or re.search(r"\bprepare\s+a\s+revision\s+plan\b", low) \
             or re.search(r"\brevision\s+plan\b", low):
         return "plan_day", None
-    if re.search(r"^\s*(move|reschedule|push|shift)\b", low) or \
+    if re.search(r"^\s*(move|reschedule|push|shift|postpone|delay)\b", low) or \
             re.search(r"\bmove\b.*\btask\b", low) and re.search(r"\b(move|reschedule)\b", low):
         return "reschedule", None
-    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed)\b", low):
+    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed)\b", low) \
+            or re.match(r"^\s*(complete|finish)\s+\S", low):
         return "complete_task", None
     if re.search(r"^\s*(delete|remove)\b", low):
         return "delete_task", None
@@ -103,6 +104,53 @@ def split_requests(text):
 def _has_task_noun(text):
     low = (text or "").lower()
     return any(n in low for n in TASK_NOUNS)
+
+
+# Lead verbs/possessives and trailing date clauses stripped from task_ref
+# candidates ("move my networking assignment to friday" -> "networking assignment")
+_REF_LEAD_WORDS = ("can you", "could you", "please", "move", "reschedule", "push",
+                   "shift", "postpone", "delay", "delete", "remove", "cancel",
+                   "complete", "finish", "mark", "done with", "do")
+_REF_ARTICLES = ("the ", "my ", "a ", "an ", "that ", "this ")
+_REF_TAIL_WORDS = ("to", "for", "by", "until", "till", "on")
+_DATEISH_TOKENS = ("today", "tonight", "tomorrow", "next", "mon", "tue", "wed",
+                   "thu", "fri", "sat", "sun", "monday", "tuesday", "wednesday",
+                   "thursday", "friday", "saturday", "sunday")
+
+
+def clean_task_ref(text):
+    """Normalize a task_ref extracted from a move/complete/delete request."""
+    from focus_agent.schemas import clean_str
+    t = (text or "").strip().strip("\"'").strip()
+    changed = True
+    while changed and t:
+        changed = False
+        low = t.lower()
+        for w in sorted(_REF_LEAD_WORDS, key=len, reverse=True):
+            if low.startswith(w + " "):
+                t = t[len(w) + 1:].strip()
+                changed = True
+                break
+        if not changed:
+            for art in _REF_ARTICLES:
+                if low.startswith(art):
+                    t = t[len(art):].strip()
+                    changed = True
+                    break
+    # trailing "to <date>" clause (only when the tail names a date)
+    words = t.split()
+    for i in range(1, len(words)):
+        if words[i].lower().rstrip(".,") in _REF_TAIL_WORDS:
+            tail = " ".join(words[i:])
+            tail_low = tail.lower()
+            if any(dt in tail_low for dt in _DATEISH_TOKENS) or \
+                    re.search(r"\d{4}-\d{2}-\d{2}", tail):
+                t = " ".join(words[:i]).strip()
+                break
+    # trailing bare connector ("... assignment to")
+    while t and len(t.split()) > 1 and t.split()[-1].lower().rstrip(".,") in _REF_TAIL_WORDS:
+        t = " ".join(t.split()[:-1]).strip()
+    return clean_str(t, 200)
 
 
 def extract_duration(text):
@@ -224,6 +272,8 @@ def parse_task_segment(segment, now=None, settings=None):
 
     title = clean_title(text, due_matched=None, dur_matched=dur_matched)
     title = clean_title(title, due_matched=due_matched)
+    title = re.sub(r"^(?:i\s+)?(?:really\s+)?(?:need|have)\s+to\s+", "", title,
+                   flags=re.IGNORECASE)
     title = re.sub(r"^(?:please\s+)?(?:my|the|a|an)\s+", "", title, flags=re.IGNORECASE)
     if not title or len(title) < 2:
         title = clean_str(segment, 200) or "New Task"
@@ -262,17 +312,26 @@ def extract_deterministic(text, now=None, settings=None):
             t = parse_task_segment(seg, now=now, settings=settings)
             t.source = "local"
             if intent == "reschedule":
-                m = re.search(r"\b(?:move|reschedule|push|shift)\s+(?:the\s+|my\s+)?(.+?)\s+task\b",
+                m = re.search(r"\b(?:move|reschedule|push|shift|postpone|delay)\s+(?:the\s+|my\s+)?(.+?)\s+task\b",
                               seg.lower())
-                t.task_ref = clean_str(m.group(1), 200) if m else t.title
+                t.task_ref = (clean_task_ref(m.group(1)) if m
+                              else clean_task_ref(t.title))
             elif intent == "complete_task":
-                m = re.search(r"\b(?:finished|completed|done with|done)\s+(?:the\s+|my\s+)?(.+)",
+                m = re.search(r"\b(?:finished|completed|complete|finish|done with|done)\s+(?:the\s+|my\s+)?(.+)",
                               seg.lower())
-                t.task_ref = clean_str(m.group(1), 200) if m else t.title
+                t.task_ref = (clean_task_ref(m.group(1)) if m
+                              else clean_task_ref(t.title))
             elif intent == "delete_task":
                 m = re.search(r"^(?:delete|remove)\s+(?:the\s+|my\s+)?(.+)",
                               seg.lower())
-                t.task_ref = clean_str(m.group(1), 200) if m else t.title
+                t.task_ref = (clean_task_ref(m.group(1)) if m
+                              else clean_task_ref(t.title))
+            if intent in ("reschedule", "complete_task", "delete_task"):
+                # a ref equal to the raw title means the regexes found nothing
+                if t.task_ref and t.task_ref.lower() == (t.title or "").lower() \
+                        and t.title and _has_task_noun(t.title) is False:
+                    t.task_ref = clean_task_ref(t.title)
+                t.title = None  # ref intents reference, they do not create
             result.tasks.append(t)
 
         # Material ambiguity: deadline-sensitive task with no date at all
