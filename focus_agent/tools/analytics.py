@@ -5,6 +5,7 @@
 from logic import (
     get_today_focus_stats, get_analytics_data, record_actual_duration,
 )
+from focus_agent import dates as fdates
 from focus_agent import estimator as fest
 from focus_agent import scheduler as fsched
 from focus_agent.tools.base import ToolResult, tool, find_task_fuzzy
@@ -44,6 +45,17 @@ def tool_record_focus_time(data, args, ctx):
     if not t:
         return ToolResult(False, "record_focus_time", error=f"No task matching {args['task_ref']!r}")
     if record_actual_duration(data, t["id"], args["minutes"]):
+        try:
+            now = ctx.get("now")
+            from focus_agent.repository import FocusRepository
+            started = now.strftime("%H:%M") if now is not None else None
+            date_str = now.date().isoformat() if now is not None else \
+                fdates.today_str(ctx.get("settings"))
+            FocusRepository(data).log_session(date_str, args["minutes"],
+                                              kind="focus", task_id=t.get("id"),
+                                              started_hhmm=started)
+        except Exception:
+            pass  # learning feed must not break recording
         return ToolResult(True, "record_focus_time",
                           message=f"Recorded {args['minutes']}min on '{t.get('title')}'",
                           data={"task_id": t["id"]})
@@ -99,3 +111,107 @@ def tool_estimate_task_duration(data, args, ctx):
                                f"Basis: {info['basis']}"),
                       data={"minutes": info["minutes"], "basis": info["basis"],
                             "samples": info["samples"], "reliable": info["reliable"]})
+
+
+# ==================== V2 ANALYTICS TOOLS (Phase 5) ====================
+
+@tool("get_task_completion_history", "Completed and missed tasks over a window, with rates by subject.",
+      {"days": {"type": "int", "min": 1, "max": 365, "default": 30}})
+def tool_get_task_completion_history(data, args, ctx):
+    from focus_agent import patterns as fpatterns
+    days = args.get("days", 30)
+    now = ctx.get("now")
+    cutoff = ""
+    if now is not None:
+        from datetime import timedelta
+        cutoff = (now.date() - timedelta(days=days)).isoformat()
+    completed, missed = [], []
+    for t in list(data.get("tasks", [])) + list(data.get("archived_tasks", [])):
+        if not isinstance(t, dict) or t.get("type") != "task":
+            continue
+        if t.get("status") == "done":
+            done_at = (t.get("completed_at") or "")[:10]
+            if cutoff and done_at and done_at < cutoff:
+                continue
+            completed.append({"title": t.get("title"), "subject": t.get("subject"),
+                              "completed_on": done_at or None,
+                              "est_minutes": t.get("duration"),
+                              "actual_minutes": t.get("actual_minutes")})
+        elif t.get("date") and cutoff and t["date"] < cutoff \
+                and t.get("status") not in ("done", "archived"):
+            missed.append({"title": t.get("title"), "subject": t.get("subject"),
+                           "due": t["date"]})
+    rates = fpatterns.subject_completion_rates(data)
+    total_done = len(completed)
+    return ToolResult(True, "get_task_completion_history",
+                      message=(f"{total_done} completed, {len(missed)} overdue-"
+                               f"un-done in the last {days} day(s)"),
+                      data={"days": days, "completed": completed[:40],
+                            "overdue_undone": missed[:40],
+                            "subject_rates": rates})
+
+
+@tool("compare_estimated_actual_duration", "Estimated vs actual duration for completed tasks (overall and per subject), with mean error ratio.",
+      {"subject": {"type": "str", "max": 120}})
+def tool_compare_estimated_actual_duration(data, args, ctx):
+    est = fest.estimation_analytics(data)
+    subject = args.get("subject")
+    rows = []
+    for t in list(data.get("tasks", [])) + list(data.get("archived_tasks", [])):
+        if not isinstance(t, dict) or t.get("status") != "done":
+            continue
+        e, a = t.get("duration"), t.get("actual_minutes")
+        if not isinstance(e, (int, float)) or not isinstance(a, (int, float)) or e <= 0:
+            continue
+        if subject and (t.get("subject") or "").lower() != subject.lower():
+            continue
+        rows.append({"title": t.get("title"), "subject": t.get("subject"),
+                     "estimated_minutes": int(e), "actual_minutes": int(a),
+                     "difference_minutes": int(a - e)})
+    if subject and est.get("by_subject"):
+        key = next((k for k in est["by_subject"] if k.lower() == subject.lower()), None)
+        scoped = est["by_subject"].get(key) if key else None
+        summary = scoped or {"n": 0, "mae_minutes": None}
+    else:
+        summary = {"n": est.get("n", 0), "mae_minutes": est.get("mae_minutes"),
+                   "mean_error_ratio": est.get("mean_error_ratio"),
+                   "on_time_rate": est.get("on_time_rate")}
+    if not rows:
+        return ToolResult(True, "compare_estimated_actual_duration",
+                          message="No completed tasks with both an estimate and an "
+                                  "actual time yet - complete timed tasks to build this.",
+                          data={"rows": [], "summary": summary})
+    return ToolResult(True, "compare_estimated_actual_duration",
+                      message=(f"{len(rows)} completed task(s) compared; mean error "
+                               f"ratio {summary.get('mean_error_ratio', 'n/a')}"),
+                      data={"rows": rows[:40], "summary": summary})
+
+
+@tool("analyze_productivity_patterns", "Learned patterns: productive hours, weekday effects, schedule adherence, missed-task carry-overs. Discloses when data is insufficient.",
+      {})
+def tool_analyze_productivity_patterns(data, args, ctx):
+    from focus_agent import patterns as fpatterns
+    summary = fpatterns.pattern_summary(data, now=ctx.get("now"))
+    hours = summary["productive_hours"]
+    best = hours.get("hours")
+    msg_parts = []
+    if hours.get("reliable") and best:
+        top = sorted(best, key=best.get, reverse=True)[:3]
+        msg_parts.append(f"Most productive around "
+                         f"{', '.join(h + ':00' for h in top)} "
+                         f"({hours['basis']})")
+    else:
+        msg_parts.append(f"Productive hours: not enough data yet ({hours['basis']})")
+    adh = summary["adherence"]
+    if adh.get("reliable"):
+        msg_parts.append(f"Plan adherence {adh['ratio']:.0%} ({adh['basis']})")
+    else:
+        msg_parts.append(f"Plan adherence: not enough committed plans yet "
+                         f"({adh['basis']})")
+    missed = summary["missed_tasks"]
+    if missed:
+        titles = ", ".join(m["title"] for m in missed[:3])
+        msg_parts.append(f"{len(missed)} task(s) past due: {titles}")
+    return ToolResult(True, "analyze_productivity_patterns",
+                      message=" | ".join(msg_parts),
+                      data=summary)

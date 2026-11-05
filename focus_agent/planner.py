@@ -74,19 +74,23 @@ def _blocks_for(data, date_str):
 
 
 def plan_range(data, start_date, settings=None, now=None, days=None,
-               capacity_minutes=None, commit=False):
+               capacity_minutes=None, commit=False, hour_scores=None):
     """Plan open tasks across a deadline-aware horizon.
 
     - horizon: `days` (default 1) capped at MAX_HORIZON_DAYS, extended only by
       the scan itself when deadlines fall beyond it (still capped).
     - capacity_minutes: explicit user limit (e.g. 'I have three hours free') -
       total newly allocated work cannot exceed it.
+    - hour_scores: optional {"14": 0.9, ...} productive-hour profile - free
+      intervals are worked in descending score order (learning-aware placement)
+      while staying deterministic.
     - commit: persist per-day planned slots (validated call sites only).
     """
     settings = settings or (data.get("settings") or {})
     tz_now = now or fdates.now_here(settings)
     start = _to_date(start_date)
     n_days = max(1, min(days or 1, MAX_HORIZON_DAYS))
+    use_scores = isinstance(hour_scores, dict) and bool(hour_scores)
 
     # candidate workload: open, type=task, with estimates
     open_tasks = []
@@ -130,7 +134,8 @@ def plan_range(data, start_date, settings=None, now=None, days=None,
         if capacity_minutes is not None:
             day_capacity = max(0, capacity_minutes - allocated_total)
         placed_today = _allocate_day(free, open_tasks, day, day_capacity,
-                                     tz_now if day == start_date else None)
+                                     tz_now if day == start_date else None,
+                                     hour_scores=hour_scores if use_scores else None)
 
         for slot in placed_today:
             day_result.slots.append(slot)
@@ -181,12 +186,27 @@ def _slot_minutes(slot):
     return max(0, (e or 0) - (s or 0))
 
 
-def _allocate_day(free, open_tasks, day_str, day_capacity, now_for_day=None):
-    """Earliest-fit allocation of candidate tasks into one day's free time."""
+def _allocate_day(free, open_tasks, day_str, day_capacity, now_for_day=None,
+                  hour_scores=None):
+    """Earliest-fit allocation of candidate tasks into one day's free time.
+
+    With hour_scores, higher-scoring free intervals are filled first (deep work
+    lands in learned-productive hours); ties and unscored intervals keep
+    earliest-first order."""
     slots = []
     if now_for_day is not None:
         now_min = now_for_day.hour * 60 + now_for_day.minute
         free = _subtract(free, 0, now_min)
+    if hour_scores:
+        def interval_score(iv):
+            marks = [hour_scores.get(str(h)) for h in range(iv["start"] // 60,
+                                                           ((iv["end"] - 1) // 60) + 1)]
+            vals = [v for v in marks if isinstance(v, (int, float))]
+            avg = (sum(vals) / len(vals)) if vals else 0.0
+            return (-avg, iv["start"])
+        free = sorted((dict(iv) for iv in free), key=interval_score)
+    else:
+        free = [dict(iv) for iv in free]
     cap_left = day_capacity
     for cand in open_tasks:
         if cand["remaining"] <= 0:

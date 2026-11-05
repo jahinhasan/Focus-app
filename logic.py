@@ -669,14 +669,16 @@ def get_weekly_class_tasks(data):
     return week
 
 # ==================== FOCUS SESSION ====================
-def log_focus_session(data, seconds_spent, session_type="focus"):
+def log_focus_session(data, seconds_spent, session_type="focus", started_hhmm=None):
     """
     Log a focus session and award XP.
-    
+
     Args:
         data: The data dict
         seconds_spent: Time spent (seconds)
         session_type: "focus" or "class"
+        started_hhmm: optional "HH:MM" start time - feeds the hourly focus
+            buckets the learning engine uses for productive-hour detection
     """
     if seconds_spent < 60:
         return  # Ignore very short sessions
@@ -694,8 +696,29 @@ def log_focus_session(data, seconds_spent, session_type="focus"):
         data["focus_sessions"][date_key]["class_seconds"] += int(seconds_spent)
     else:
         data["focus_sessions"][date_key]["total_seconds"] += int(seconds_spent)
-    
+
     data["focus_sessions"][date_key]["sessions"] += 1
+
+    # v4 learning feeds: hourly bucket + per-session record (best-effort)
+    try:
+        hour = (started_hhmm or "")[:2]
+        if hour.isdigit() and 0 <= int(hour) < 24:
+            buckets = data.setdefault("hourly_focus", {})
+            day = buckets.setdefault(date_key, {})
+            day[hour] = round(day.get(hour, 0.0) + seconds_spent / 60.0, 1)
+        log = data.setdefault("focus_session_log", [])
+        log.append({
+            "date": date_key,
+            "minutes": max(1, round(seconds_spent / 60)),
+            "kind": session_type,
+            "task_id": None,
+            "started_hhmm": started_hhmm,
+            "recorded_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+        if len(log) > 2000:
+            data["focus_session_log"] = log[-2000:]
+    except Exception:
+        pass  # learning feeds must never break the timer
 
     # XP: 1 XP per 5 minutes for focus, 1 XP per 2 minutes for class
     if session_type == "class":
