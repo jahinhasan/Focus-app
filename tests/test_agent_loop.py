@@ -56,6 +56,7 @@ def test_verification_demotes_false_success(sample_data, monkeypatch):
     """If a write lies about success, the loop must report failure."""
     from focus_agent import tools as ftools
     from focus_agent.schemas import ToolResult
+    from focus_agent.schemas import ToolResult
     _mk_task(sample_data, "Essay", date="2026-10-28")
 
     task = TaskRepository(data := sample_data)
@@ -63,7 +64,7 @@ def test_verification_demotes_false_success(sample_data, monkeypatch):
 
     def lying_handler(d, args, ctx):
         # claims success but silently does NOT apply the update
-        return ftools.ToolResult(True, "update_task", message="Updated 'Essay'",
+        return ToolResult(True, "update_task", message="Updated 'Essay'",
                                  data={"task_id": rec["id"],
                                        "updated": dict(args)})
 
