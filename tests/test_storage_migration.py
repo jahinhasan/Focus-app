@@ -102,3 +102,45 @@ def test_stable_task_ids_survive_migration(data_env):
     _write_store(data_env, store)
     data = logic.load_data()
     assert data["tasks"][0]["id"] == "legacy-id-42", "IDs must never be regenerated"
+
+
+# ==================== v3 -> v4 (Phase 1) ====================
+
+def _v3_store():
+    store = _v1_store()
+    store["schema_version"] = 3
+    store["goals"] = [{"id": "g-1", "title": "Learn AI", "status": "active",
+                       "milestones": []}]
+    store["agent_memory"] = {
+        "estimation_records": [{"task_id": "t-1", "ratio": 1.2}],
+        "tool_log": [{"ts": 1, "call_id": "c1", "tool": "create_task", "ok": True}],
+        "plan_log": [],
+        "executed_calls": ["c1"],
+    }
+    return store
+
+
+def test_v3_to_v4_additive_all_data_preserved(data_env):
+    _write_store(data_env, _v3_store())
+    data = logic.load_data()
+    assert data["schema_version"] == 4
+    # v3 content untouched
+    assert data["tasks"][0]["title"] == "Old essay"
+    assert data["goals"][0]["title"] == "Learn AI"
+    assert data["agent_memory"]["executed_calls"] == ["c1"]
+    # v4 keys appeared
+    assert data["schedule_blocks"] == []
+    assert data["focus_session_log"] == []
+    assert data["hourly_focus"] == {}
+    assert data["tasks"][0]["due_time"] is None
+    assert data["tasks"][0]["reschedule_history"] == []
+    assert "conversations" in data["agent_memory"]
+    assert "actions" in data["agent_memory"]
+    # pre-existing fields the UI relies on
+    assert data["xp"] == 120 and data["level"] == 2
+
+
+def test_v4_migration_of_current_store_is_noop(data):
+    data = logic.load_data()
+    _, migrated, backup_path = storage.migrate_data(data)
+    assert not migrated and backup_path is None
