@@ -261,6 +261,7 @@ def main():
     run_tool_scenario()
     run_estimation()
 
+    p = None
     if args.live:
         from focus_agent.llm import OllamaProvider
         p = OllamaProvider(timeout=90)
@@ -272,6 +273,10 @@ def main():
             print(f"(live LLM pass: {detail}, {dt:.1f}s total)")
         else:
             print(f"(live pass skipped: {detail})")
+
+    run_dataset(live_provider=p)
+    run_planner_quality()
+    run_memory_effectiveness()
 
     by_area = {}
     for r in results:
@@ -292,6 +297,176 @@ def main():
     print("\n" + "-" * 74)
     print(f"OVERALL: {total_pass}/{total} ({100 * total_pass / total:.0f}%)")
     return 0 if total_pass == total else 1
+
+
+# ---------------- 7. dataset-driven extraction & understanding (spec §12) ----------------
+
+def run_dataset(live_provider=None):
+    """Every case in tests/eval_dataset.json, scored on the official metrics."""
+    path = os.path.join(BASE_DIR, "tests", "eval_dataset.json")
+    with open(path, encoding="utf-8") as f:
+        dataset = json.load(f)
+    cases = dataset["cases"]
+
+    m_task = {"n": 0, "ok": 0}       # task extraction accuracy (intent + fields)
+    m_deadline = {"n": 0, "ok": 0}   # deadline extraction accuracy
+    m_cap = {"n": 0, "ok": 0}        # capacity parsing
+    m_block = {"n": 0, "ok": 0}      # block parsing
+    m_ask = {"n": 0, "ok": 0}        # deadline handling: asks, never guesses
+
+    for case in cases:
+        exp = case["expect"]
+        if live_provider is not None:
+            # the production path: extraction + deterministic merge rules
+            res = fextract.extract(case["text"], provider=live_provider, now=NOW,
+                                   settings=SETTINGS,
+                                   subject_names=["AI", "Database Systems"])
+        else:
+            res = fextract.extract_deterministic(case["text"], now=NOW,
+                                                 settings=SETTINGS)
+        t0 = res.tasks[0] if res.tasks else None
+
+        ok_task = True
+        if "intent_any" in exp and res.intent not in exp["intent_any"]:
+            ok_task = False
+        elif "intent" in exp and res.intent != exp["intent"]:
+            ok_task = False
+        if "n_tasks" in exp and len(res.tasks) != exp["n_tasks"]:
+            ok_task = False
+        if "task_ref_contains" in exp:
+            if not (t0 and exp["task_ref_contains"] in (t0.task_ref or "")):
+                ok_task = False
+        if "estimated_minutes" in exp and \
+                (not t0 or t0.estimated_minutes != exp["estimated_minutes"]):
+            ok_task = False
+        m_task["n"] += 1
+        m_task["ok"] += ok_task
+
+        if "due_date" in exp:
+            m_deadline["n"] += 1
+            got = t0.due_date if t0 else None
+            m_deadline["ok"] += (got == exp["due_date"])
+
+        if "capacity_minutes" in exp:
+            m_cap["n"] += 1
+            m_cap["ok"] += (res.available_minutes == exp["capacity_minutes"])
+
+        if "block" in exp:
+            m_block["n"] += 1
+            b = res.blocks[0] if res.blocks else {}
+            m_block["ok"] += (b.get("start") == exp["block"]["start"]
+                              and b.get("end") == exp["block"]["end"])
+
+        if exp.get("asks"):
+            m_ask["n"] += 1
+            m_ask["ok"] += bool(res.question)
+
+    def pct(m):
+        return f"{m['ok']}/{m['n']} ({round(100 * m['ok'] / m['n'])}%)" if m["n"] else "n/a"
+
+    record("dataset_extraction", "task extraction accuracy", m_task["ok"] == m_task["n"], pct(m_task))
+    record("dataset_deadlines", "deadline extraction accuracy", m_deadline["ok"] == m_deadline["n"], pct(m_deadline))
+    record("dataset_capacity", "free-capacity parsing", m_cap["ok"] == m_cap["n"], pct(m_cap))
+    record("dataset_blocks", "block time parsing", m_block["ok"] == m_block["n"], pct(m_block))
+    record("dataset_ask", "asks instead of guessing", m_ask["ok"] == m_ask["n"], pct(m_ask))
+
+
+# ---------------- 8. planning quality on range planner (spec §12) ----------------
+
+def run_planner_quality():
+    from focus_agent import planner as fplanner
+    from focus_agent.repository import TaskRepository, ScheduleRepository
+    import tempfile, logic as _logic, storage as _storage
+    tmp = tempfile.mkdtemp()
+    _logic.DATA_FILE = os.path.join(tmp, "d.json")
+    _storage.DATA_FILE = _logic.DATA_FILE
+    data = _logic.load_data()
+    repo = TaskRepository(data)
+    repo.create("Essay", deadline="2026-10-27", duration=180, importance=3)
+    repo.create("Reading", deadline="2026-10-30", duration=90)
+    repo.create("Impossible", deadline="2026-10-24", duration=2000)
+
+    # capacity honored exactly
+    plan = fplanner.plan_range(data, "2026-10-23", settings=SETTINGS, now=NOW,
+                               days=1, capacity_minutes=180)
+    total = sum(_slot_min(s) for s in plan.days[0].slots)
+    record("planner_capacity", "capacity limit honored", total <= 180, f"{total}min of 180")
+
+    # blocks protect time
+    ScheduleRepository(data).create("Dentist", start="15:00", end="19:00",
+                                    date="2026-10-23")
+    plan2 = fplanner.plan_range(data, "2026-10-23", settings=SETTINGS, now=NOW, days=1)
+    bad = [s for s in plan2.days[0].slots if "15:00" <= s.start < "19:00"]
+    record("planner_blocks", "fixed block protected", not bad,
+           f"{len(bad)} violating slots")
+
+    # no overlaps anywhere
+    overlaps = []
+    for d in plan2.days:
+        ss = sorted(d.slots, key=lambda s: s.start)
+        overlaps += [1 for a, b in zip(ss, ss[1:]) if b.start < a.end]
+    record("planner_overlaps", "no overlapping slots", not overlaps,
+           f"{len(overlaps)} overlaps")
+
+    # overflow identified, never silently dropped
+    record("planner_overflow", "infeasible work reported",
+           any("Impossible" == u["title"] for u in plan2.unschedulable),
+           "; ".join(u["title"] for u in plan2.unschedulable) or "none reported")
+
+
+def _slot_min(slot):
+    from focus_agent import dates as fdates
+    return (fdates.hhmm_to_minutes(slot.end) - fdates.hhmm_to_minutes(slot.start))
+
+
+# ---------------- 9. memory effectiveness (spec §12, official metric) ----------------
+
+def run_memory_effectiveness():
+    """Estimation error WITHOUT history vs WITH history on a known truth."""
+    import tempfile, logic as _logic, storage as _storage
+    tmp = tempfile.mkdtemp()
+    _logic.DATA_FILE = os.path.join(tmp, "d.json")
+    _storage.DATA_FILE = _logic.DATA_FILE
+    data = _logic.load_data()
+    truth = 120   # the user truly takes 2x their estimates
+
+    def build_history(n):
+        from logic import add_task_logic
+        for i in range(n):
+            add_task_logic(data, f"AI hw {i}", duration=60, subject="AI", difficulty=2)
+            t = data["tasks"][-1]
+            t["actual_minutes"] = truth
+            t["status"] = "done"
+            t["completed_at"] = f"2026-10-{10 + i:02d}T12:00:00"
+
+    cold = fest.estimate_minutes(data, {"duration": 60, "subject": "AI",
+                                        "difficulty": 2})
+    build_history(4)
+    learned = fest.estimate_minutes(data, {"duration": 60, "subject": "AI",
+                                           "difficulty": 2, "created_at": "2026-10-20T00:00:00"})
+    cold_err = abs(cold["minutes"] - truth)
+    learned_err = abs(learned["minutes"] - truth)
+    improved = learned_err < cold_err and learned.get("reliable")
+    record("memory_effectiveness",
+           f"estimation improves with history (cold {cold['minutes']}min -> "
+           f"learned {learned['minutes']}min, truth {truth}min)", improved,
+           f"error {cold_err} -> {learned_err} min")
+
+    # adherence math on a committed plan
+    from focus_agent import patterns as fpatterns
+    from logic import add_task_logic, complete_task_logic, save_data
+    past = "2026-10-22"
+    t1 = add_task_logic(data, "Planned done", duration=60)
+    data["tasks"][-1]["planned"] = {"date": past, "start": "09:00", "end": "10:00"}
+    complete_task_logic(data, t1["id"])
+    add_task_logic(data, "Planned skipped", duration=60)
+    data["tasks"][-1]["planned"] = {"date": past, "start": "11:00", "end": "12:00"}
+    data.setdefault("agent_memory", {})["plan_log"] = [
+        {"ts": 1, "plan": {"date": past, "committed": True, "slots": []}}]
+    save_data(data)
+    adh = fpatterns.schedule_adherence(data, today=NOW.date())
+    record("memory_adherence", "adherence ratio computed from real records",
+           adh["ratio"] == 0.5, f"{adh['slots_honored']}/{adh['slots_total']} honored")
 
 
 if __name__ == "__main__":

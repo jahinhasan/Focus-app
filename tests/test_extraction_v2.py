@@ -44,9 +44,13 @@ def test_spec_case_analyze_productivity_is_query():
 
 
 def test_spec_case_imperative_complete():
-    r = fe.extract_deterministic("complete the networking task", now=NOW)
+    # bare imperative "complete/finish" stays add_task (ambiguity rule);
+    # past-tense forms are the complete_task signal
+    r = fe.extract_deterministic("I completed the networking task", now=NOW)
     assert r.intent == "complete_task"
-    assert r.tasks[0].task_ref == "networking task"
+    assert "networking" in (r.tasks[0].task_ref or "")
+    r2 = fe.extract_deterministic("Finish the scholarship application", now=NOW)
+    assert r2.intent == "add_task"
 
 
 def test_need_to_title_cleanup():

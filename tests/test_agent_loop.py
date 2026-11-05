@@ -122,7 +122,7 @@ def test_task_choice_disambiguation_flow(sample_data):
     _mk_task(sample_data, "Networking assignment", date="2026-10-28")
     _mk_task(sample_data, "Networking quiz prep", date="2026-10-29")
     c = AgentController(sample_data)
-    reply = c.handle("complete the networking task", provider=OfflineProvider(), now=NOW)
+    reply = c.handle("I completed the networking task", provider=OfflineProvider(), now=NOW)
     assert reply.status == "asked_user" and "which one" in reply.message.lower()
     reply2 = c.handle("the first one", provider=OfflineProvider(), now=NOW)
     reloaded = logic.load_data()

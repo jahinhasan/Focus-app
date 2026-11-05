@@ -53,15 +53,16 @@ def detect_intent(text):
             or re.search(r"\bplan\b.*\b(pending|tasks|assignments|everything|work)\b", low):
         return "plan_day", None
     if re.search(r"^\s*(move|reschedule|push|shift|postpone|delay)\b", low) or \
-            re.search(r"\bmove\b.*\btask\b", low) and re.search(r"\b(move|reschedule)\b", low):
+            re.search(r"\bmove\b.*\btask\b", low) and re.search(r"\b(move|reschedule)\b", low) or \
+            re.search(r"\b(reschedule|postpone|delay)\b", low):
         return "reschedule", None
-    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed)\b", low) \
-            or re.match(r"^\s*(complete|finish)\s+\S", low):
+    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed)\b", low):
         return "complete_task", None
     if re.search(r"^\s*(delete|remove)\b", low):
         return "delete_task", None
     if re.search(r"\b(goal|roadmap|milestone|learning path|master\s+plan)\b", low) or \
-            re.search(r"\bi want to learn\b", low) or re.search(r"\bmy goal is\b", low):
+            re.search(r"\bi\s+(want|would like)\s+to\s+(learn|master|study)\b", low) or \
+            re.search(r"\bmy goal is\b", low):
         return "goal", None
     if re.match(r"^(analyze|analysis|how productive|productivity)\b", low):
         return "query", "productivity"
@@ -599,7 +600,6 @@ def extract_with_llm(text, provider, now=None, settings=None, subject_names=None
         }
         if isinstance(goal_raw.get("target_date"), str) and re.match(r"^\d{4}-\d{2}-\d{2}$",
                                                                       goal_raw["target_date"]):
-            from focus_agent.schemas import valid_date
             result.goal["target_date"] = valid_date(goal_raw["target_date"])
     if result.intent == "unknown" and not result.tasks and not result.reply:
         result.reply = None
@@ -656,6 +656,25 @@ def extract(text, provider=None, now=None, settings=None, subject_names=None):
             for lt2, dt2 in zip(llm_res.tasks, det.tasks):
                 if not lt2.task_ref and dt2.task_ref:
                     lt2.task_ref = dt2.task_ref
+        # Structural intents anchored on explicit keywords ("plan my day",
+        # "reschedule", "don't schedule") beat model inference - same rule as
+        # dates: keyword evidence wins.
+        elif det.intent in ("plan_day", "block_time", "reschedule",
+                            "complete_task", "delete_task", "query") \
+                and llm_res.intent != det.intent:
+            llm_res.intent = det.intent
+            llm_res.warnings.append(f"intent taken from local parser ({det.intent}) "
+                                    f"over model's ({llm_res.intent})")
+            for lt3, dt3 in zip(llm_res.tasks, det.tasks):
+                if not lt3.task_ref and dt3.task_ref:
+                    lt3.task_ref = dt3.task_ref
+        # model found nothing actionable but the local parser did (e.g. model
+        # answered "goal" for a concrete task request) -> trust the parser
+        if not llm_res.tasks and det.intent == "add_task" and det.tasks \
+                and llm_res.intent in ("goal", "unknown"):
+            det.warnings.append("intent/tasks taken from local parser "
+                                f"(model said {llm_res.intent})")
+            return det
         if llm_res.tasks:
             return llm_res
         if llm_res.intent in ("chat", "query", "plan_day", "goal"):

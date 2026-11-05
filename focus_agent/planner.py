@@ -143,7 +143,10 @@ def plan_range(data, start_date, settings=None, now=None, days=None,
         plan.days.append(day_result)
         allocated_total += sum(_slot_minutes(s) for s in placed_today)
 
-    # deadline feasibility: for each task, was enough allocated before its due?
+    # deadline feasibility: for each task, could enough time exist before its
+    # deadline (inside the plan plus, when the deadline lies beyond it, the
+    # days between plan end and the deadline - capacity-estimated)?
+    from datetime import timedelta as _td
     for cand in open_tasks:
         due = cand["task"].get("date")
         if not due:
@@ -151,21 +154,36 @@ def plan_range(data, start_date, settings=None, now=None, days=None,
         in_horizon = sum(_slot_minutes(s)
                          for d in plan.days for s in d.slots
                          if s.task_id == cand["task"]["id"])
-        if in_horizon == 0:
-            # never placed anywhere: either out of horizon or no room
-            within = _to_date(due) <= _to_date(plan.end_date)
-            plan.unschedulable.append({
-                "task_id": cand["task"]["id"], "title": cand["task"].get("title", ""),
-                "reason": (f"needs {cand['minutes']}min before {due} but no free slot "
-                           f"was available in {plan.start_date}..{plan.end_date}"
-                           + (f" (capacity limit {capacity_minutes}min)"
-                              if capacity_minutes is not None else "")),
-            })
-        elif in_horizon < cand["minutes"] and _to_date(due) <= _to_date(plan.end_date):
+        if in_horizon >= cand["minutes"]:
+            continue
+        try:
+            due_d = _to_date(due)
+        except (ValueError, TypeError):
+            continue
+        end_d = _to_date(plan.end_date)
+        if due_d <= end_d:
             plan.unschedulable.append({
                 "task_id": cand["task"]["id"], "title": cand["task"].get("title", ""),
                 "reason": (f"only {in_horizon} of {cand['minutes']}min fit before "
-                           f"the {due} deadline"),
+                           f"the {due} deadline")
+                + (f" (capacity limit {capacity_minutes}min)"
+                   if capacity_minutes is not None else ""),
+            })
+            continue
+        # deadline beyond the plan horizon: is the remaining time even there?
+        window_end = min(due_d, start + _td(days=MAX_HORIZON_DAYS - 1))
+        extra_capacity = 0
+        probe = end_d + _td(days=1)
+        while probe <= window_end:
+            free_d, _busy_d, _info = get_availability(data, probe.isoformat(), settings)
+            extra_capacity += sum(iv["end"] - iv["start"] for iv in free_d)
+            probe += _td(days=1)
+        if in_horizon + extra_capacity < cand["minutes"]:
+            plan.unschedulable.append({
+                "task_id": cand["task"]["id"], "title": cand["task"].get("title", ""),
+                "reason": (f"needs {cand['minutes']}min before {due} but only "
+                           f"{in_horizon + extra_capacity}min of free time exists "
+                           f"between {plan.start_date} and {due}"),
             })
 
     if capacity_minutes is not None:

@@ -45,7 +45,7 @@ the repository layout. The current state of the code is documented in
 ┌──────▼───────┐  ┌───────▼─────────┐  ┌──────▼──────────────────┐
 │ 3. LLM       │  │ 4. UNDERSTANDING│  │ 5. TOOL REGISTRY        │
 │ providers    │  │ extractor.py    │  │ tools/ package          │
-│ llm.py       │  │ subjects.py     │  │ ~36 tools, typed schema │
+│ llm.py       │  │ subjects.py     │  │ 47 tools (incl. aliases), typed schema │
 │ ollama ·     │  │ dates.py        │  │ permission classes      │
 │ online · null│  │ intent, tasks,  │  │ confirmation policy     │
 │ typed errors │  │ goals, ref-res  │  │ idempotency · audit     │
@@ -62,7 +62,7 @@ the repository layout. The current state of the code is documented in
        │          └───────┬──────────┘  ┌─────▼───────────────────┐
 ┌──────▼──────────────────▼─────────────┤ 8. DOMAIN MODELS        │
 │ 9. MEMORY & LEARNING                  │ models.py (pydantic)    │
-│ memory/ package                       │ Task Subject ClassRoutine│
+│ memory.py + patterns.py               │ Task Subject ClassRoutine│
 │ conversations · actions · adherence · │ Goal GoalMilestone       │
 │ hourly focus buckets · estimation     │ ScheduleBlock FocusSession│
 │ (estimator.py) with disclosed basis   │ ProductivityRecord …     │

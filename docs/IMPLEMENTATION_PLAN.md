@@ -105,7 +105,7 @@ Objective: replace the single-pass controller with the real agent loop
 
 ## Phase 5 — Memory & learning (`feature/v2-memory-learning`)
 
-1. `memory/` package: conversations, actions, plans, adherence, hourly focus
+1. `patterns.py` + `memory.py`: conversations, actions, plans, adherence, hourly focus
    buckets; `patterns.py` (productive hours, weekday effects, subject rates).
 2. Focus timer writes per-session records + hourly buckets (additive; aggregates
    keep flowing for existing views).
