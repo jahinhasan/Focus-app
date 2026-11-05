@@ -391,6 +391,26 @@ class AgentController:
 
     def _answer_query(self, action, now):
         data = self.data
+        if action == "productivity":
+            from focus_agent import estimator as fest
+            est = fest.estimation_analytics(data)
+            comp = fest.completion_analytics(data)
+            focus = data.get("focus_sessions", {})
+            week = sorted(focus.keys())[-7:]
+            week_min = sum(round(focus[d].get("total_seconds", 0) / 60) for d in week)
+            lines = ["📊 **Last 7 days**"]
+            lines.append(f"⏱ Focus time: {week_min}min across {len(week)} active day(s)")
+            if est.get("n"):
+                lines.append(f"🎯 Estimation: actuals ran {est['mean_error_ratio']}x "
+                             f"estimates on average ({est['n']} completed tasks, "
+                             f"MAE {est['mae_minutes']}min)")
+            else:
+                lines.append("🎯 No estimate-vs-actual data yet - complete timed tasks "
+                             "and I'll learn your pace.")
+            if comp.get("done_ratio") is not None:
+                lines.append(f"✅ Completion: {comp['done_ratio']:.0%} of tasks done "
+                             f"({comp['completed_total']} total)")
+            return AgentReply("\n".join(lines))
         if action == "stats":
             lvl, xp, pct = get_level_progress(data)
             focus = get_today_focus_stats(data)

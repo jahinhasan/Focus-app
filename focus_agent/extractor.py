@@ -44,7 +44,8 @@ def detect_intent(text):
     if re.search(r"\b(plan|schedule)\b.*\b(day|today|tomorrow|week)\b", low) \
             or re.search(r"\b(daily\s+plan|plan\s+my\s+day|what\s+should\s+i\s+do)\b", low) \
             or re.search(r"\bprepare\s+a\s+revision\s+plan\b", low) \
-            or re.search(r"\brevision\s+plan\b", low):
+            or re.search(r"\brevision\s+plan\b", low) \
+            or re.search(r"\bplan\b.*\b(pending|tasks|assignments|everything|work)\b", low):
         return "plan_day", None
     if re.search(r"^\s*(move|reschedule|push|shift|postpone|delay)\b", low) or \
             re.search(r"\bmove\b.*\btask\b", low) and re.search(r"\b(move|reschedule)\b", low):
@@ -57,9 +58,11 @@ def detect_intent(text):
     if re.search(r"\b(goal|roadmap|milestone|learning path|master\s+plan)\b", low) or \
             re.search(r"\bi want to learn\b", low) or re.search(r"\bmy goal is\b", low):
         return "goal", None
+    if re.match(r"^(analyze|analysis|how productive|productivity)\b", low):
+        return "query", "productivity"
     if re.match(r"^(what|when|where|which|who|how much|how many|how long|show|list|tell|do i have)\b", low):
         action = None
-        if re.search(r"\bxp\b|\blevel\b|\bprogress\b", low):
+        if re.search(r"\bxp\b|\blevel\b|\bprogress\b|productivity", low):
             action = "stats"
         elif re.search(r"\bnext class\b|\bnext lecture\b", low):
             action = "next_class"
@@ -382,6 +385,20 @@ Rules:
 - goal: only when the user describes a long-term learning goal or roadmap."""
 
 
+_CLASS_ATTEND_RE = re.compile(
+    r"^(?:attend|go\s+to|goes\s+to|going\s+to|have|has|had|attending)\s+.{0,60}?\bclass\b"
+    r"(?:\s+(?:tomorrow|today|tonight|next\s+\w+|on\s+\w+))?$", re.IGNORECASE)
+
+
+def looks_like_class_attendance(title):
+    """True when a title describes attending a class rather than study work.
+
+    Class occurrences get their time from the routine, never a copied study
+    estimate (guards against 'attend networking class, ~180min' artifacts).
+    """
+    return bool(_CLASS_ATTEND_RE.match((title or "").strip()))
+
+
 def extract_with_llm(text, provider, now=None, settings=None, subject_names=None):
     """LLM-based extraction; validated. Returns ExtractionResult (source='llm').
 
@@ -416,6 +433,9 @@ def extract_with_llm(text, provider, now=None, settings=None, subject_names=None
         for tr in tasks_raw[:5]:
             tr = dict(tr) if isinstance(tr, dict) else {}
             tr["confidence"] = 0.85
+            # class attendance copies no study duration - the routine owns it
+            if looks_like_class_attendance(str(tr.get("title") or "")):
+                tr["estimated_minutes"] = None
             task, warnings = validate_extracted_task(tr)
             # The model must not invent dates that skip validation silently.
             # ref-style intents carry task_ref instead of a title.
