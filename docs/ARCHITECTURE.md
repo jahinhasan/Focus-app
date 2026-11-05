@@ -1,151 +1,223 @@
-# Focus V2 — Architecture
+# Focus Agent V2 — Architecture
 
-This document describes how the To Do Agent is built: the layers, the contracts
-between them, and the invariants that keep the agent safe and honest.
+This document defines the V2 target architecture: layers, contracts, invariants, and
+the repository layout. The current state of the code is documented in
+[V1_AUDIT.md](V1_AUDIT.md); the agent's internal design is detailed in
+[AGENT_DESIGN.md](AGENT_DESIGN.md); the delivery sequence lives in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-## Layer map
+## 1. Design principles
+
+1. **The agent is the product.** Every feature must be reachable through natural
+   language + tools, not only through screens.
+2. **Deterministic-first.** Parsing, scheduling, validation, estimation, and
+   analytics are plain Python and work with the LLM offline. The LLM adds
+   understanding; it never owns state changes.
+3. **The LLM never touches storage.** The only write path is validated tools.
+   The controller enforces the same rule on itself (audit issue #13).
+4. **Unknown ≠ invented.** Missing fields stay `null`; ambiguity produces a
+   clarifying question; low-confidence matches are flagged, never silently applied.
+5. **Local-first & private.** Ollama/Qwen is the primary provider; the online
+   provider is opt-in, env-keyed, and always disclosed. The app is fully usable
+   with `provider=none`.
+6. **Additive data evolution.** Storage migrations never delete or rewrite user
+   data; every migration writes a timestamped backup first.
+7. **Measure, don't claim.** Evaluation numbers come from running code.
+
+## 2. Layer map (V2 target)
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ 1. UI / chat (ui.py, CustomTkinter)                              │
-│    async worker + confirmation bridge, plan/goal/settings views  │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ AgentController.handle(text) -> AgentReply
-┌──────────────▼───────────────────────────────────────────────────┐
-│ 2. Controller (focus_agent/controller.py)                        │
-│    intent routing, fast paths, provider lifecycle, disclosures   │
-└──────┬──────────────────┬───────────────────────┬────────────────┘
-       │                  │                       │
-┌──────▼───────┐  ┌───────▼────────┐  ┌──────────▼──────────────┐
-│ 3. LLM       │  │ 4. Extraction  │  │ 5. Tools                │
-│ abstraction  │  │ (extractor.py) │  │ (tools.py + schemas.py) │
-│ (llm.py)     │  └───────┬────────┘  └──────────┬──────────────┘
-└──────┬───────┘          │                      │
-       │           ┌──────▼────────┐  ┌──────────▼──────────────┐
-       │           │ 6. Deterministic parsing & scheduling           │
-       │           │ (dates.py, subjects.py, scheduler.py)           │
-       │           └───────────────┘  └──────────┬──────────────┘
-┌──────▼──────────────────────────────────────────▼───────────────┐
-│ 7. Memory & analytics (memory.py, estimator.py, logic.py)       │
-│    audit log, idempotency cache, estimation, streaks, XP        │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ only via storage.py (atomic writes, migration)
-┌──────────────▼───────────────────────────────────────────────────┐
-│ 8. Optional online research (OnlineProvider, env-keyed)         │
-└──────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ 1. UI (ui/ package, CustomTkinter)                                 │
+│    chat · dashboard · tasks · subjects · routine · planner ·       │
+│    goals · timer · analytics · settings                            │
+│    renders AgentEvent stream: steps, tool calls, confirmations      │
+└──────────────┬─────────────────────────────────────────────────────┘
+               │ AgentController.handle(text) -> AgentTurn
+┌──────────────▼─────────────────────────────────────────────────────┐
+│ 2. AGENT CONTROLLER (focus_agent/controller.py)                    │
+│    AgentLoop: context → reasoning → ToolCall → validate → execute  │
+│    → observe → repeat (budgeted) → final reply                     │
+│    guards: step budget · repeat detection · verify-before-claim     │
+│    pending-question state across turns                             │
+└──────┬──────────────────┬───────────────────┬─────────────────────┘
+       │                  │                   │
+┌──────▼───────┐  ┌───────▼─────────┐  ┌──────▼──────────────────┐
+│ 3. LLM       │  │ 4. UNDERSTANDING│  │ 5. TOOL REGISTRY        │
+│ providers    │  │ extractor.py    │  │ tools/ package          │
+│ llm.py       │  │ subjects.py     │  │ ~36 tools, typed schema │
+│ ollama ·     │  │ dates.py        │  │ permission classes      │
+│ online · null│  │ intent, tasks,  │  │ confirmation policy     │
+│ typed errors │  │ goals, ref-res  │  │ idempotency · audit     │
+└──────┬───────┘  └───────┬─────────┘  └──────┬──────────────────┘
+       │                  │                   │ ToolCall/ToolResult
+       │          ┌───────▼──────────┐  ┌─────▼───────────────────┐
+       │          │ 6. PLANNING      │  │ 7. REPOSITORIES         │
+       │          │ planner.py       │  │ repository.py           │
+       │          │ priority ·       │  │ typed facades over      │
+       │          │ multi-day slots ·│  │ tasks/subjects/goals/   │
+       │          │ conflicts ·      │  │ schedule/focus/memory   │
+       │          │ feasibility ·    │  └─────┬───────────────────┘
+       │          │ explanations     │        │ domain models only
+       │          └───────┬──────────┘  ┌─────▼───────────────────┐
+┌──────▼──────────────────▼─────────────┤ 8. DOMAIN MODELS        │
+│ 9. MEMORY & LEARNING                  │ models.py (pydantic)    │
+│ memory/ package                       │ Task Subject ClassRoutine│
+│ conversations · actions · adherence · │ Goal GoalMilestone       │
+│ hourly focus buckets · estimation     │ ScheduleBlock FocusSession│
+│ (estimator.py) with disclosed basis   │ ProductivityRecord …     │
+└──────────────┬────────────────────────┴─────────────────────────┘
+               │ additive schema migrations + backups
+┌──────────────▼─────────────────────────────────────────────────────┐
+│ 10. PERSISTENCE  storage.py → data.json (schema v4)                │
+│ 11. OPTIONAL online research (env-keyed, disclosed)                │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-## 1. UI layer
+### Invariants
 
-The chat view runs each agent turn on a worker thread so the tkinter main loop
-never blocks on a 15-second model call. Confirmations bridge worker → UI →
-worker through a `queue.Queue` so destructive tool calls always get a real
-user decision (or none, if no UI exists — the tool then refuses).
+- Tools are the **only** writers. UI, controller, LLM, planner all mutate state
+  through repositories/services; `logic.py` becomes an implementation detail of
+  the repositories, not a peer import surface.
+- The planner is deterministic and pure where possible: `plan(date) -> PlanResult`
+  with explanations; committing a plan is a separate validated tool call.
+- Every agent-visible number that is learned (durations, productive hours,
+  adherence) carries its `basis` — sample count and rule — so the UI can show
+  "learned vs default".
+- Failed tool execution leaves no residue: call IDs are released on failure so
+  retries are possible (existing behavior, kept).
 
-New views: **Planner** (day plan with per-slot reasons, apply button), **Goals**
-(progress bars, milestone checkboxes, editable roadmaps), AI **Settings**
-(provider, endpoint, model, Test Connection, study window, backups), estimation
-analytics in Reports, and a streak line in History.
+## 3. Target repository layout
 
-## 2. Controller
+```text
+focus-app/
+├── main.py                    # entry point (unchanged role)
+├── storage.py                 # persistence + schema migration (v3→v4)
+├── evaluate.py                # benchmark harness (extended, Phase 7)
+├── requirements.txt           # runtime deps (legacy cloud deps → extras)
+├── docs/                      # V1_AUDIT · ARCHITECTURE · AGENT_DESIGN ·
+│                              # IMPLEMENTATION_PLAN · EVALUATION
+├── focus_agent/
+│   ├── __init__.py
+│   ├── config.py              # centralized settings access (Phase 1)
+│   ├── models.py              # pydantic domain models + dict bridges (Phase 1)
+│   ├── repository.py          # typed data services (Phase 1)
+│   ├── llm.py                 # providers (kept, extended for tool-calls Phase 2)
+│   ├── schemas.py             # ToolCall/ToolResult + validation (kept)
+│   ├── controller.py          # agent loop (Phase 2 rewrite)
+│   ├── prompts.py             # all prompt templates (Phase 2)
+│   ├── extractor.py           # NL understanding (kept, extended Phase 3)
+│   ├── subjects.py            # subject detection (kept, extended Phase 3)
+│   ├── dates.py               # date parsing (kept)
+│   ├── estimator.py           # duration learning (kept, extended Phase 5)
+│   ├── goals.py               # goal logic + roadmap drafts (kept, Phase 3)
+│   ├── memory/
+│   │   ├── __init__.py        # memory engine facade (Phase 5)
+│   │   ├── store.py           # conversations, actions, adherence stores
+│   │   └── patterns.py        # productive hours, missed-task patterns
+│   ├── planner.py             # multi-day planning engine (Phase 4; scheduler.py
+│   │                          # remains as the single-day kernel it wraps)
+│   ├── scheduler.py           # single-day deterministic kernel (kept)
+│   └── tools/
+│       ├── __init__.py        # registry shell (execute_tool, ToolSpec)
+│       ├── tasks.py           # task tools
+│       ├── subjects.py        # subject/routine tools
+│       ├── schedule.py        # schedule/planning tools
+│       ├── goals.py           # goal tools
+│       └── analytics.py       # productivity/analytics tools
+├── ui/                        # split from ui.py (Phase 6)
+│   ├── app.py                 # FocusApp shell
+│   ├── chat.py                # agent chat + event rendering
+│   ├── dashboard.py · tasks.py · subjects.py · routine.py
+│   ├── planner.py · goals.py · timer.py · analytics.py · settings.py
+│   └── widgets.py             # shared widgets (XPBar, TimePicker, …)
+├── tests/                     # pytest suite (per-phase growth)
+├── android/                   # Flutter companion (untouched in V2 core)
+└── data.json                  # user store (gitignored)
+```
 
-`AgentController.handle()` is the single entry point. It answers greetings and
-stats/class queries deterministically (no model round-trip), then classifies
-intent, extracts, and routes to handlers that call tools. Providers are
-injectable for tests (`provider=`, `now=`).
+The `focus_agent/` + flat-module layout stays import-compatible during the
+transition: Phase 1 introduces new modules without moving old ones; Phase 2
+replaces the controller in place; the `tools/` package supersedes the flat
+`tools.py` with a compatibility import so existing tests keep passing until
+updated in the same commit that moves them.
 
-Routing table: `add_task` → create per extracted task (+ follow-up question if
-the extraction raised one), `complete/delete` → `_route_task_ref`, `reschedule`
-→ move + `reschedule_day`, `plan_day` → uncommitted plan proposal, `goal` →
-create + roadmap draft, `chat` → local answer or disclosed online research.
+## 4. Domain models (spec §9)
 
-## 3. LLM abstraction
+`models.py` defines pydantic models; each has `from_dict()/to_dict()` bridges so
+the JSON store keeps its dict shape. Required models and their key fields:
 
-Providers implement `chat()` / `chat_json()` / `status()` / `capabilities()`.
-`OllamaProvider` (primary) posts to `/api/chat` with `think:false` (thinking
-models like qwen3 emit `<think>` blocks otherwise) and `format:"json"` in
-json mode. `OnlineProvider` reads its key **only** from the environment, sends
-it exclusively as an Authorization header, and is opt-in. `NullProvider`
-backing provider="none". All failure modes — unreachable, timeout, 404 model
-missing, 429/503 busy, malformed output, empty output — map to typed errors
-(`ProviderUnavailable`, `ModelNotInstalled`, `BadResponse`) that the UI can
-explain. Env vars override stored settings; `FOCUS_LLM_PROVIDER=none` forces
-fully-deterministic operation.
+| Model | Key fields | Store location today |
+| :-- | :-- | :-- |
+| `UserProfile` | xp, level, streak, settings links, timezone | top-level `xp/level/streak/settings` |
+| `Subject` | name, source (vault/routine), keywords | `subjects` dict |
+| `ClassRoutine` | weekday → {title, subject, start, end} | `tasks[type=class].schedule` |
+| `Task` | id, title, type, subject, status, due date/time, estimate, actual, importance, difficulty, subtasks, planned slot, recurrence, goal_id, reschedule history | `tasks[type=task]` |
+| `Subtask` | title, done | `tasks[].subtasks` |
+| `Goal` | id, title, status, target_date, milestones | `goals` |
+| `GoalMilestone` | title, done, target_date, estimate | `goals[].milestones` |
+| `ScheduleBlock` | date, start, end, kind (class/task/custom), source | NEW: `schedule_blocks` (custom fixed commitments) |
+| `FocusSession` | date, start/end or duration, task_id, kind | NEW per-session records; day aggregates stay |
+| `ProductivityRecord` | date, hour_bucket, focus_minutes, tasks_done | NEW hourly buckets under `focus_sessions` |
+| `AgentConversation` | id, started_at, turns[] | NEW: `agent_memory.conversations` |
+| `AgentAction` | call_id, tool, args, ok, ts, turn ref | promoted from `tool_log` |
+| `AgentMemory` | estimation records, patterns, adherence, plan log | `agent_memory` (extended) |
 
-## 4. Structured extraction
+Migration v4 adds only new keys/sections; the v3 reader in `storage.py` keeps
+working, and `tests/test_storage_migration.py` extends to cover v3→v4 with a
+realistic v2-era file.
 
-Extraction always runs the deterministic parser (`extract_deterministic`) and
-tries the LLM pass (`extract_with_llm`). Merge rules favor evidence:
+## 5. Data flow — one agent turn (target)
 
-- LLM fields fill gaps in the deterministic result; deterministic keyword dates
-  beat model-inferred dates on conflict (measured: qwen3 misresolved "tonight"
-  and "next wednesday"; the resolver does not).
-- An LLM intent outside the schema ("unknown") is rescued by the deterministic
-  classifier.
-- Every LLM field is validated independently (`validate_extracted_task`):
-  invalid dates/durations/intensities become null with a warning — never
-  executed, never invented.
+```text
+user text
+  │
+  ▼
+AgentController.handle()
+  │ 1. persist AgentConversation turn
+  │ 2. pending-question check (clarification continuation)
+  │ 3. deterministic fast paths (greetings, stats, next class)   ← no LLM
+  │ 4. loop (budget: max_steps, max_llm_calls, no-repeat guard):
+  │      context pack → LLM decides {tool_call | ask_user | final_answer}
+  │        ├── tool_call → validate schema → permission/confirmation
+  │        │      → execute via tools/ → ToolResult → observe
+  │        │      → verify critical effects (re-read state) before success
+  │        ├── ask_user → surface question, park state, end turn
+  │        └── final_answer → compose with tool results + explanations
+  │ 5. persist AgentAction records + turn outcome
+  ▼
+AgentTurn {reply, tool_results[], plan?, status, events[]}
+```
 
-Material ambiguity produces follow-up questions: deadline-sensitive keywords
-(submit, exam, application, register, …) with no date ask "When is this due?"
-instead of guessing.
+The offline path (provider unavailable or `provider=none`) skips step 4's LLM and
+uses the deterministic extractor + fixed intent routing — identical to today's
+behavior, which the existing tests pin down.
 
-## 5. Tool layer
+## 6. Configuration
 
-26 tools registered with typed schemas (`ToolSpec`). `execute_tool` runs an
-ordered pipeline: unknown-tool rejection → idempotency (`call_id` dedup cache
-in `agent_memory.executed_calls`) → schema validation (unknown arguments
-rejected) → confirmation gate (destructive/committing tools, with a
-`confirm_fn` for conditional cases) → handler → audit log. Any handler crash
-becomes a `ToolResult` error — the agent never raises into the UI. The model
-never sees a database connection or shell; the only path to storage is these
-handlers.
+Single precedence chain, implemented in `config.py` (Phase 1), replacing scattered
+lookups:
 
-## 6. Deterministic core
+`environment variable` → `data.settings.agent` → `default`
+(`FOCUS_LLM_PROVIDER`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`,
+`ONLINE_LLM_*`, `FOCUS_TZ`, loop budgets `FOCUS_AGENT_MAX_STEPS`,
+`FOCUS_AGENT_MAX_LLM_CALLS`). Secrets never enter `data.json` — online keys are
+env-only (unchanged rule).
 
-- `dates.py` — timezone-aware relative dates (today/tonight/tomorrow/next
-  weekday/in-N-days/23-11), rule: weekday = next occurrence strictly after
-  today; ambiguous numeric dates (10-11) are ignored without a date keyword.
-- `subjects.py` — confidence-scored matching (exact 1.0 / contains 0.9 /
-  token-overlap / fuzzy) with AUTO threshold 0.82; class routine titles count
-  as subject evidence ("CSE 3202" → that class's subject); below threshold the
-  agent flags instead of assigning.
-- `scheduler.py` — urgency buckets (overdue 40 … none 0) + importance/difficulty
-  scoring with human-readable reasons; earliest-fit placement inside the study
-  window minus class intervals; long tasks split into ≤90-min chunks with
-  breaks; today's past is clipped; done/started slots preserved on reschedule;
-  overload is reported with alternatives, never silently dropped; tasks without
-  estimates are explained, not scheduled.
+## 7. UI integration contract
 
-## 7. Memory & analytics
+The chat view receives an `AgentTurn` and renders its `events[]` — real loop steps
+only ("Checking your class routine…", "Created task 'X' ✓"). The UI must never
+display a step that did not happen; proposed-but-unconfirmed plans render as
+proposals with an explicit apply action. This is a hardening of the existing
+ChatView behavior, kept thread-safe via the existing worker-thread + queue bridge.
 
-`agent_memory` (capped logs) records every tool execution and plan for audit.
-The estimator learns a median actual/estimated ratio per subject+difficulty
-(≥3 samples), falls back subject → difficulty → global median → a disclosed
-default ×1.15, with a created-at leakage guard so future completions never
-influence past predictions. Streaks compute from history day keys.
+## 8. Non-goals (explicit)
 
-## 8. Online research (opt-in)
-
-Only when configured via env and the user's message needs research. The reply
-discloses online use. Unavailable → local fallback answer, clearly labeled.
-
-## Storage & migration
-
-Flat `data.json`, atomic writes (`.tmp` + `os.replace`). Migration to schema
-v3 is additive (new fields defaulted, none removed) with a timestamped backup
-in `backups/` (gitignored). Corrupt files are moved to
-`data.json.corrupt-<ts>`, never overwritten. Rollback: restore a backup from
-Settings → Data & Backups, or copy the file manually.
-
-## Security invariants
-
-- API keys: environment variables only; never in data files, task records, or
-  logs; the online adapter sends the key only as an Authorization header.
-- Model output is untrusted: validated field-by-field, JSON extracted
-  defensively (fences, balanced-brace scan), and executed only through
-  schema-checked tools with confirmation for destructive actions.
-- Prompt-injection containment: user text is data, not instructions; the chat
-  route never chains destructive tools, verified by test.
-- Local-first: with provider=none or Ollama down, the entire app remains
-  functional.
+- No multi-agent orchestration: one controller loop, specialized tools (spec §11).
+- No framework adoption (LangChain etc.): the custom loop stays auditable.
+- No server/database engine: `data.json` + atomic writes remain sufficient for a
+  single-user desktop app; the repository layer is where a future store change
+  would happen.
+- No removal of V1 features (vault, habits, store, timer, mobile port) — they are
+  outside the agent path and stay untouched except for UI packaging.

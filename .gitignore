@@ -47,3 +47,6 @@ agentic-context-engine/
 backups/
 data.json.corrupt-*
 skillbook.json.corrupt-*
+
+# Stray debug artifacts
+android/test_*.txt
