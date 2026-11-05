@@ -11,7 +11,7 @@ IMPORTANCE_RANGE = (1, 3)
 DIFFICULTY_RANGE = (1, 3)
 INTENTS = (
     "add_task", "update_task", "complete_task", "delete_task", "reschedule",
-    "plan_day", "query", "goal", "chat", "unknown",
+    "plan_day", "block_time", "query", "goal", "chat", "unknown",
 )
 
 
@@ -48,6 +48,8 @@ class ExtractionResult:
     query_action: str | None = None         # e.g. "stats", "next_class"
     reply: str | None = None                # chat reply when intent == "chat"
     goal: dict | None = None                # {"title", "description", "target_date"}
+    blocks: list = field(default_factory=list)  # [{"title","days","date","start","end"}]
+    available_minutes: int | None = None    # "I have three hours free" capacity hint
     source: str = "local"                   # "local" | "llm"
     warnings: list = field(default_factory=list)
 
@@ -59,6 +61,8 @@ class ExtractionResult:
             "query_action": self.query_action,
             "reply": self.reply,
             "goal": self.goal,
+            "blocks": list(self.blocks),
+            "available_minutes": self.available_minutes,
             "source": self.source,
             "warnings": list(self.warnings),
         }

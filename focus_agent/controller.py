@@ -13,6 +13,7 @@
 from focus_agent import dates as fdates
 from focus_agent import extractor as fextract
 from focus_agent import scheduler as fsched
+from focus_agent import planner as fplanner
 from focus_agent import subjects as fsubjects
 from focus_agent import goals as fgoals
 from focus_agent.llm import (
@@ -357,6 +358,7 @@ class AgentController:
             "complete_task": self._plan_task_ref,
             "delete_task": self._plan_task_ref,
             "reschedule": self._plan_reschedule,
+            "block_time": self._plan_blocks,
             "plan_day": None,                      # read-only, handled directly
             "goal": self._plan_goal,
             "query": None,
@@ -364,7 +366,14 @@ class AgentController:
         }.get(intent, "chat")
 
         if intent == "plan_day":
-            reply = self._reply_plan(extraction, now)
+            reply = self._reply_plan(text, extraction, now)
+        elif intent == "block_time":
+            steps = self._plan_blocks(text, extraction, now)
+            loop = AgentLoop(self.data, ctx=self._ctx(now),
+                             confirm_callback=confirm_callback,
+                             conversation_id=self._conversation())
+            outcome = loop.run(steps)
+            reply = self._compose("block_time", extraction, outcome, now)
         elif intent == "query":
             reply = self._answer_query(extraction.query_action
                                        or _guess_query_action(text), now)
@@ -706,11 +715,57 @@ class AgentController:
 
     # ---------------- planning (read-only proposal) ----------------
 
-    def _reply_plan(self, extraction, now):
-        date_str = fdates.today_str(self.data.get("settings"))
+    def _plan_blocks(self, text, extraction, now):
+        """Steps for 'don't schedule X to Y' requests."""
+        if not extraction.blocks:
+            q = extraction.question or ("What time should I keep free? "
+                                        "(e.g. 'from 10 AM to 12 PM')")
+            return [Step("ask", args={"question": q, "intent": "block_time",
+                                      "draft": {"need": "block_times"}})]
+        steps: list[Step] = []
+        for b in extraction.blocks[:3]:
+            args = {"title": b["title"], "start": b["start"], "end": b["end"]}
+            if b.get("days"):
+                args["days"] = b["days"]
+            if b.get("date"):
+                args["date"] = b["date"]
+            steps.append(Step("tool", "create_schedule_block", args,
+                              note=f"Blocking {b['start']}–{b['end']} for "
+                                   f"'{b['title']}'...",
+                              verify={}))
+        return steps
+
+    def _reply_plan(self, text, extraction, now):
+        settings = self.data.get("settings") or {}
+        capacity = extraction.available_minutes
+        low = (text or "").lower()
+        # explicit capacity ("three hours free") or a named day -> range planner
+        day_str, _m = fdates.resolve_relative_date(text, now=now, settings=settings)
+        multi_day = "week" in low
+        if capacity or multi_day or (day_str and day_str != now.date().isoformat()):
+            start = day_str or fdates.today_str(settings)
+            plan = fplanner.plan_range(self.data, start, settings=settings,
+                                       now=now, days=7 if multi_day else 1,
+                                       capacity_minutes=capacity, commit=False)
+            lines = [f"🗓 **Plan from {plan.start_date}"
+                     + (f" to {plan.end_date}**" if multi_day else "**")]
+            for d in plan.days:
+                if d.slots:
+                    lines.append(f"_{d.date}_")
+                for s in d.slots:
+                    lines.append(f"• **{s.start}–{s.end}** {s.title}")
+            for u in plan.unschedulable:
+                lines.append(f"⚠ **{u['title']}**: {u['reason']}")
+            lines.extend(plan.notes)
+            if capacity:
+                lines.append(f"(limited to the {capacity}min you said you have)")
+            lines.append("\nSay **'apply the plan'** (or open the Planner tab) to commit it.")
+            return AgentReply("\n".join(lines), extraction=extraction,
+                              plan=plan.to_dict())
+        # default: today's single-day kernel proposal (legacy behavior)
+        date_str = fdates.today_str(settings)
         plan = fsched.generate_day_plan(self.data, date_str,
-                                        settings=self.data.get("settings"),
-                                        now=now, commit=False)
+                                        settings=settings, now=now, commit=False)
         lines = [f"🗓 **Plan for {date_str}**"]
         for s in plan.slots:
             fixed = "✅" if s.fixed else "•"

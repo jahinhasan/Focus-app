@@ -175,12 +175,19 @@ class TaskRepository:
         return self.get(task["id"])
 
     def update(self, task_id: str, **fields) -> dict:
-        """Validated field update. Unknown/None fields are ignored."""
+        """Validated field update. Accepts domain names (due_date,
+        duration_minutes) and store names (date, duration) alike; None fields
+        are ignored."""
         t = self.get(task_id)
         if not t:
             raise ValidationError(f"task {task_id!r} not found")
+        field_map = {"due_date": "date", "duration_minutes": "duration"}
         # validate through the model: overlay current + proposed fields
-        proposed = {k: v for k, v in fields.items() if v is not None}
+        proposed = {}
+        for k, v in fields.items():
+            if v is None:
+                continue
+            proposed[field_map.get(k, k)] = v
         merged = {**t, **proposed}
         try:
             Task(**merged)
