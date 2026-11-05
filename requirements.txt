@@ -1,19 +1,22 @@
-# Focus V2 - To Do Agent (desktop)
+# Focus Agent V2 (desktop) - core runtime
 customtkinter>=5.2.2
 pillow>=10.2.0          # >=11 needed on Python 3.13+ (10.2.0 does not build there)
 tkcalendar>=1.6.1
 darkdetect>=0.8.0
 requests>=2.31.0        # LLM provider HTTP (Ollama / online adapter)
+pydantic>=2.5           # domain models (models.py) + repository validation
 pypdf>=3.17.4
 python-docx>=1.1.0
 pytesseract>=0.3.10
 python-dotenv>=1.0.0
 
-# Legacy V1 cloud parsers (optional; the V2 agent defaults to local Ollama
-# and never needs any cloud key). Remove if you don't use them.
-groq>=0.4.2
-openai>=1.12.0
-google-genai
-
 # Development / evaluation
 pytest>=8.0
+
+# ---- Optional: legacy V1 cloud routine/vault import (ai_parser.py) ----
+# The V2 agent runs fully locally on Ollama and never needs these.
+# Install explicitly if you use routine photo import with cloud parsers:
+#   pip install -r requirements.txt && pip install groq openai google-genai
+# groq>=0.4.2
+# openai>=1.12.0
+# google-genai

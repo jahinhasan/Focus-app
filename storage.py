@@ -17,7 +17,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data.json")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 DEFAULT_AGENT_SETTINGS = {
     "provider": "ollama",          # "ollama" | "online" | "none"
@@ -39,6 +39,11 @@ def default_agent_section():
         "tool_log": [],             # capped audit of agent tool executions
         "plan_log": [],             # capped history of generated daily plans
         "executed_calls": [],       # recent tool call ids (idempotency)
+        # --- v4 additions ---
+        "conversations": [],        # capped AgentConversation records
+        "actions": [],              # capped AgentAction records
+        "hourly_focus": {},         # date -> {hour: focus minutes}
+        "adherence": {},            # plan adherence cache/analytics
     }
 
 
@@ -94,7 +99,18 @@ def migrate_data(data, backup=True):
     data.setdefault("schema_version", SCHEMA_VERSION)
     data.setdefault("goals", [])
     data.setdefault("agent_memory", default_agent_section())
+    # v3 stores carry an agent_memory without v4 keys - merge new defaults in
+    for _k, _v in default_agent_section().items():
+        mem0 = data["agent_memory"]
+        if _k not in mem0:
+            mem0[_k] = (dict(_v) if isinstance(_v, dict) else list(_v)
+                        if isinstance(_v, list) else _v)
     data.setdefault("streak", 0)  # int kept for the existing XPBar display
+
+    # --- v4 additive fields -------------------------------------------
+    data.setdefault("schedule_blocks", [])     # user fixed commitments
+    data.setdefault("focus_session_log", [])   # per-session records
+    data.setdefault("hourly_focus", {})        # date -> {hour: minutes}
 
     settings = data.setdefault("settings", {})
     settings.setdefault("timezone", "local")
@@ -113,9 +129,17 @@ def migrate_data(data, backup=True):
         task.setdefault("planned", None)         # {date, start, end, reason}
         task.setdefault("recurrence", None)      # {"type": "daily"|"weekly", ...}
         task.setdefault("goal_id", None)
+        task.setdefault("due_time", None)        # v4: explicit deadline time
+        task.setdefault("reschedule_history", [])  # v4: bounded move log
 
     # Cap unbounded agent logs defensively on every load
     mem = data.get("agent_memory", {})
+    for key in ("conversations", "actions"):
+        if isinstance(mem.get(key), list):
+            if key == "conversations" and len(mem[key]) > 50:
+                mem[key] = mem[key][-50:]
+            if key == "actions" and len(mem[key]) > 1000:
+                mem[key] = mem[key][-1000:]
     if len(mem.get("tool_log", [])) > 500:
         mem["tool_log"] = mem["tool_log"][-500:]
     if len(mem.get("plan_log", [])) > 200:
