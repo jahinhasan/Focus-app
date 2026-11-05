@@ -1,0 +1,270 @@
+{
+  "description": "Focus Agent V2 evaluation dataset. NOW = Friday 2026-10-23 14:00 (fixed reference). 'expect' fields are checked by evaluate.py: intent, due_date, estimated_minutes, n_tasks, task_ref_contains, subject_refuses, capacity_minutes, block, asks (deadline-sensitive no-date must ask).",
+  "now": "2026-10-23T14:00:00",
+  "cases": [
+    {
+      "id": "spec1",
+      "text": "Create a DBMS assignment due next Monday. It will take two hours.",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-26",
+        "estimated_minutes": 120
+      }
+    },
+    {
+      "id": "spec2",
+      "text": "Move my networking assignment to Friday.",
+      "expect": {
+        "intent": "reschedule",
+        "task_ref_contains": "networking",
+        "due_date": "2026-10-30"
+      }
+    },
+    {
+      "id": "spec3",
+      "text": "I have three hours free tomorrow. Plan my pending tasks.",
+      "expect": {
+        "intent": "plan_day",
+        "capacity_minutes": 180
+      }
+    },
+    {
+      "id": "spec4",
+      "text": "I want to learn Python in two months. Create a roadmap.",
+      "expect": {
+        "intent": "goal"
+      }
+    },
+    {
+      "id": "spec5",
+      "text": "I couldn't complete yesterday's assignment. Reschedule it.",
+      "expect": {
+        "intent": "reschedule"
+      }
+    },
+    {
+      "id": "spec6",
+      "text": "Analyze my productivity over the last seven days.",
+      "expect": {
+        "intent": "query"
+      }
+    },
+    {
+      "id": "spec7",
+      "text": "I have a class from 10 AM to 12 PM tomorrow. Don't schedule anything during that time.",
+      "expect": {
+        "intent": "block_time",
+        "block": {
+          "start": "10:00",
+          "end": "12:00"
+        }
+      }
+    },
+    {
+      "id": "spec8",
+      "text": "I completed the assignment in four hours, although the estimate was two hours.",
+      "expect": {
+        "intent": "complete_task",
+        "estimated_minutes": 240
+      }
+    },
+    {
+      "id": "x01",
+      "text": "Tomorrow submit my AI assignment; it will take about two hours",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-24",
+        "estimated_minutes": 120
+      }
+    },
+    {
+      "id": "x02",
+      "text": "Add a 45-minute Python practice task for tonight",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-23",
+        "estimated_minutes": 45
+      }
+    },
+    {
+      "id": "x03",
+      "text": "I have an exam next Monday; prepare a revision plan",
+      "expect": {
+        "intent": "plan_day"
+      }
+    },
+    {
+      "id": "x04",
+      "text": "Move the unfinished database task to my next available study slot",
+      "expect": {
+        "intent": "reschedule",
+        "task_ref_contains": "database"
+      }
+    },
+    {
+      "id": "x05",
+      "text": "Add math homework; also create a physics reading task for tomorrow",
+      "expect": {
+        "intent": "add_task",
+        "n_tasks": 2
+      }
+    },
+    {
+      "id": "x06",
+      "text": "This is urgent - finish the lab report by wednesday, around 2 hours",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-28",
+        "estimated_minutes": 120
+      }
+    },
+    {
+      "id": "x07",
+      "text": "I need to submit the statistics project",
+      "expect": {
+        "intent": "add_task",
+        "asks": true
+      }
+    },
+    {
+      "id": "x08",
+      "text": "plan my day",
+      "expect": {
+        "intent": "plan_day"
+      }
+    },
+    {
+      "id": "x09",
+      "text": "complete the networking task before friday",
+      "expect": {
+        "intent_any": [
+          "add_task",
+          "complete_task"
+        ],
+        "due_date": "2026-10-30"
+      },
+      "note": "ambiguous imperative; either reading is handled safely"
+    },
+    {
+      "id": "x10",
+      "text": "delete the math homework",
+      "expect": {
+        "intent": "delete_task",
+        "task_ref_contains": "math"
+      }
+    },
+    {
+      "id": "x11",
+      "text": "half an hour of reading tonight",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-23",
+        "estimated_minutes": 30
+      }
+    },
+    {
+      "id": "x12",
+      "text": "I want to master machine learning by December",
+      "expect": {
+        "intent": "goal"
+      }
+    },
+    {
+      "id": "x13",
+      "text": "what should I do today",
+      "expect": {
+        "intent": "plan_day"
+      }
+    },
+    {
+      "id": "x14",
+      "text": "how much XP do I have",
+      "expect": {
+        "intent": "query"
+      }
+    },
+    {
+      "id": "x15",
+      "text": "reschedule my essay to next tuesday",
+      "expect": {
+        "intent": "reschedule",
+        "due_date": "2026-10-27"
+      }
+    },
+    {
+      "id": "x16",
+      "text": "Don't schedule anything Friday from 2 PM until 4 PM - I have a dentist appointment",
+      "expect": {
+        "intent": "block_time",
+        "block": {
+          "start": "14:00",
+          "end": "16:00"
+        }
+      }
+    },
+    {
+      "id": "x17",
+      "text": "I have 2 hours free today. Plan my pending tasks.",
+      "expect": {
+        "intent": "plan_day",
+        "capacity_minutes": 120
+      }
+    },
+    {
+      "id": "x18",
+      "text": "finish the CSE project tomorrow, it will take 3 hours",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-24",
+        "estimated_minutes": 180
+      }
+    },
+    {
+      "id": "x19",
+      "text": "attend the networking class tomorrow",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-24"
+      }
+    },
+    {
+      "id": "x20",
+      "text": "mark the lab report as finished",
+      "expect": {
+        "intent": "complete_task",
+        "task_ref_contains": "lab"
+      }
+    },
+    {
+      "id": "x21",
+      "text": "I have a quiz next Wednesday, prepare for around 90 minutes",
+      "expect": {
+        "intent": "add_task",
+        "due_date": "2026-10-28",
+        "estimated_minutes": 90
+      }
+    },
+    {
+      "id": "x22",
+      "text": "postpone my presentation to thursday",
+      "expect": {
+        "intent": "reschedule",
+        "due_date": "2026-10-29"
+      }
+    },
+    {
+      "id": "x23",
+      "text": "plan my week",
+      "expect": {
+        "intent": "plan_day"
+      }
+    },
+    {
+      "id": "x24",
+      "text": "show my tasks",
+      "expect": {
+        "intent": "query"
+      }
+    }
+  ]
+}

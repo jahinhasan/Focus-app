@@ -27,7 +27,7 @@ tool registry, memory, and safety rules. Architecture context:
 6. **Planning Engine** — `planner.py` (multi-day) over `scheduler.py` (single-day
    kernel): priorities, availability, allocation, conflicts, feasibility,
    explanations.
-7. **Memory & Learning Engine** — `memory/` package + `estimator.py`: bounded
+7. **Memory & Learning Engine** — `patterns.py` + `memory.py` + `estimator.py`: bounded
    persistent stores, statistics only, no LLM writes.
 8. **Agent Response Engine** — controller's reply composer + UI event stream:
    results, decisions, changes, recommendations — only from real ToolResults.

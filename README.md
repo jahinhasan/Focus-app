@@ -1,19 +1,20 @@
-# 🎯 Focus — To Do Agent (V2)
+# 🎯 Focus Agent V2 — Agent-Based Student Productivity System
 
 [![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama_(local)-654FF0)](https://ollama.com)
-[![Tests](https://img.shields.io/badge/tests-128_passing-brightgreen)](#-tests--evaluation-measured-not-claimed)
+[![Tests](https://img.shields.io/badge/tests-199_passing-brightgreen)](#-evaluation-measured-not-claimed)
+[![Benchmark](https://img.shields.io/badge/benchmark-49%2F49_det_·_59%2F59_live-success)](docs/EVALUATION.md)
 
-**V1's Focus Dashboard, upgraded into an agentic productivity system.** You talk to it
-in plain English; it understands, asks when unsure, and actually does the work —
-creating tasks, reading your class routine, planning your day around classes, and
-learning your real working pace — all with a **local LLM via Ollama** so your data
-never leaves your machine.
+A personal academic productivity **agent** — not a chatbot bolted onto a to-do
+list. You talk to it in plain English; an agent loop decides steps, executes
+**validated tools**, verifies its own writes, learns your real working pace
+from focus history, and plans your days around classes, fixed commitments and
+deadlines — all **locally via Ollama**, so your data never leaves your machine.
 
-> Everything V1 had is still here: the Today dashboard, class routine with
-> photo import, Smart Vault, gamified XP/levels, habits, Pomodoro/stopwatch
-> timer, and the Flutter mobile companion. V2 adds the agent layer on top —
-> nothing was removed, and your existing data.json upgrades in place.
+> Everything V1 had is still here: the Today dashboard, class routine with photo
+> import, Smart Vault, XP/levels, habits, Pomodoro timer, and the Flutter mobile
+> companion. V2 adds the deep agent layer — nothing was removed, and your
+> `data.json` upgrades in place (schema v3 → v4, additive, backed up first).
 
 ---
 
@@ -21,185 +22,122 @@ never leaves your machine.
 
 | You say | It does |
 | :--- | :--- |
-| "Tomorrow submit my AI assignment; it will take about two hours" | Creates the task with due date **2026-10-24**, ~120 min, subject auto-matched from your routine |
-| "I have an exam next Monday; prepare a revision plan" | Proposes a class-aware day plan you can apply with one click |
-| "Move the unfinished database task to my next available study slot" | Finds the task, moves it, rebuilds the rest of the day |
-| "I want to learn machine learning by December" | Creates a goal with an editable milestone roadmap |
-| "What should I prioritize?" | Explains ranked priorities with transparent reasons |
+| "I have a Data Communication assignment due next Thursday. It is difficult and will probably take 3 hours. I also have a networking class tomorrow." | Extracts **both** items, correct relative dates, difficulty/importance, creates verified tasks, flags unknown subjects instead of guessing |
+| "Move my networking assignment to Friday." | Resolves the task (asks *which* when ambiguous), updates the deadline, proposes a rebuilt day — verified before reporting |
+| "I have three hours free tomorrow. Plan my pending tasks." | Multi-day planner honors the **exact 180-min capacity**, skips classes and fixed blocks, reports anything that couldn't fit and why |
+| "I have a class from 10 AM to 12 PM tomorrow. Don't schedule anything during that time." | Creates a protected schedule block the planner never books over |
+| "I want to learn Python in two months. Create a roadmap." | Goal + milestone roadmap spread to the target date (`decompose_goal`) |
+| "What should I prioritize?" / "Analyze my productivity over the last seven days." | Transparent priority reasons; learned stats with disclosed sample basis |
+| "I completed the assignment in four hours, although the estimate was two hours." | Records the actual time — the **estimator learns** your realism ratio per subject/difficulty |
 
-The agent **asks instead of guessing**: a deadline-sensitive task with no date gets a
-follow-up question; an ambiguous subject match is flagged, never silently assigned;
-unknown values stay null and are never invented.
+The agent **asks instead of guessing**: deadline-sensitive tasks without a date
+get a follow-up question that persists across turns; ambiguous task references
+trigger a choice; unknown values stay null and are never invented. Destructive
+actions always require explicit confirmation.
 
----
+## 🤖 The agent architecture (the actual product)
+
+```text
+user message
+  → context pack (compact, privacy-preserving)
+  → understanding (deterministic parser + local LLM extraction, merged)
+  → step plan → AGENT LOOP: validate → execute tool → verify by read-back
+                → observe → repeat (budgeted: max 6 steps / 4 LLM calls)
+  → honest event stream + reply composed only from real tool results
+```
+
+- **47 registered tools** (tasks, subjects/routine, schedule, goals, analytics)
+  with typed schemas, permission classes, confirmation policy, call-ID
+  idempotency, and an audit log. The LLM never touches storage.
+- **Deterministic-first**: parsing, scheduling, estimation and analytics work
+  with the model offline; `provider=none` keeps every feature usable.
+- **Learning, disclosed**: duration realism (median ratio per subject/difficulty,
+  cold-start labeled as default), productive-hour detection (needs 45 min of
+  attributed focus), schedule adherence (needs committed plans), missed-task
+  carry-overs. Every learned number reports `{basis, samples, reliable}`.
 
 ## 🚀 Getting started
 
-### One-command setup (new PC)
-
-Copy the project folder to any PC, then run **one** command:
-
-| OS | Command |
+| OS | One command |
 | :--- | :--- |
-| Windows | double-click `setup.bat` (or run it in cmd) |
+| Windows | double-click `setup.bat` |
 | Linux / macOS | `bash setup.sh` |
 
-The script creates a virtual environment, installs every requirement, checks
-the GUI libraries and Ollama (with exact fix hints if anything is missing),
-and launches the app. Re-running it is always safe.
-
-Manual install, if you prefer:
-
-### 1. Install the app
+Manual:
 
 ```bash
 git clone https://github.com/jahinhasan/Focus-app.git
 cd Focus-app
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 2. Set up the local AI (Ollama)
-
-1. Install Ollama: <https://ollama.com/download>
-2. Pull a model (default is **qwen3:4b** — any Qwen tag works, or edit the model
-   field in Settings → AI):
-
-   ```bash
-   ollama pull qwen3:4b
-   ```
-
-3. Verify:
-
-   ```bash
-   ollama list
-   curl http://localhost:11434/api/tags
-   ```
-
-That's it — no API keys, no cloud accounts. The model runs on your machine.
-
-### 3. Run
-
-```bash
 python main.py
 ```
 
-First launch of the chat view shows the AI provider status. If Ollama isn't
-running, the app says so and every feature still works — planning, scheduling,
-tools, and analytics are deterministic and never require the model.
+Local AI (recommended): install [Ollama](https://ollama.com/download), then
+`ollama pull qwen3:4b` (any Qwen tag works; configurable in Settings → AI).
+Verify: `curl http://localhost:11434/api/tags`. No API keys, no cloud.
 
-### Environment variables (all optional)
+Optional environment variables (see [.env.example](.env.example)):
+`OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`, `FOCUS_LLM_PROVIDER`
+(`ollama`/`online`/`none`), `FOCUS_TZ`, `ONLINE_LLM_API_KEY` (env-only, never
+stored), loop budgets `FOCUS_AGENT_MAX_STEPS` / `FOCUS_AGENT_MAX_LLM_CALLS` /
+`FOCUS_AGENT_MAX_TOOL_CALLS`. Legacy cloud routine-import is now an optional
+extra (`pip install groq openai google-genai`); the agent never needs it.
 
-| Variable | Purpose | Default |
+## 📊 Evaluation (measured, not claimed)
+
+Full methodology and per-section detail: [docs/EVALUATION.md](docs/EVALUATION.md).
+
+| Metric (spec §12) | Deterministic | Live `qwen3:4b` |
 | :--- | :--- | :--- |
-| `OLLAMA_HOST` | Ollama endpoint | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Model tag to use | `qwen3:4b` |
-| `OLLAMA_TIMEOUT` | Chat timeout (seconds) | `120` |
-| `FOCUS_LLM_PROVIDER` | Force provider: `ollama` / `online` / `none` | from Settings |
-| `FOCUS_TZ` | IANA timezone for dates/deadlines | `local` |
-| `ONLINE_LLM_API_KEY` | **Optional** online adapter (OpenAI-compatible). Env-only; never stored in data files | unset |
-| `ONLINE_LLM_BASE_URL` | Online adapter endpoint | `https://api.openai.com/v1` |
-| `ONLINE_LLM_MODEL` | Online adapter model | `gpt-4o-mini` |
-
-See [.env.example](.env.example) for annotated placeholders. **Never** put real
-keys in data.json, task records, or committed files.
-
----
-
-## 🧪 Tests & evaluation (measured, not claimed)
+| Task extraction accuracy | 32/32 | 32/32 |
+| Deadline extraction accuracy | 11/11 | 11/11 |
+| Subject classification accuracy | 5/5 | — (deterministic matcher) |
+| Scheduling quality | 11/11 checks | — (deterministic planner) |
+| Deadline handling (asks, never guesses) | 4/4 | 4/4 |
+| Duration estimation error | 51 min → **0 min** with history (truth 120) | — |
+| Tool execution success | 11/11 | 11/11 |
+| Memory effectiveness | verified (51→0 min; adherence from real records) | — |
+| **Overall benchmark** | **49/49 (100%)** | **59/59 (100%)** |
 
 ```bash
-# 128 deterministic tests - no LLM needed, run anywhere
-.venv/bin/python -m pytest tests/ -q
-
-# Reproducible benchmark: extraction, subjects, scheduling, tools, estimation
-.venv/bin/python evaluate.py
-
-# Same benchmark + extraction through the real local model
-.venv/bin/python evaluate.py --live
+.venv/bin/python -m pytest tests/ -q     # 199 tests, no LLM needed
+.venv/bin/python evaluate.py             # deterministic benchmark
+.venv/bin/python evaluate.py --live      # + real model pass
 ```
-
-Actual measured results from the last run in this repo
-(Ollama `qwen3:4b` on localhost; deterministic reference = built-in parser):
-
-| Area | Deterministic | Live LLM pass |
-| :--- | :--- | :--- |
-| Extraction (spec examples) | 7/7 | 7/7 |
-| Deadline handling (asks, never guesses) | 3/3 | 3/3 (deterministic layer) |
-| Subject assignment (incl. refusing to guess) | 5/5 | — |
-| Schedule feasibility (overlaps, classes, past, no drops) | 8/8 | — |
-| Tool actions (validation, permissions, idempotency) | 11/11 | 11/11 |
-| Estimation (learning, generalization, cold start, leakage) | 4/4 | — |
-| **Overall** | **38/38 (100%)** | **48/48 (100%)** |
-
-The evaluation is part of CI; numbers are computed at run time, never hand-written.
-
----
 
 ## 🗄️ Your data & migration safety
 
-- Storage stays a human-readable `data.json` (local-first, same as V1).
-- First launch after upgrading **migrates in place** to schema v3: additive
-  fields only, all V1 values, IDs, and settings are preserved — verified by
-  [tests/test_storage_migration.py](tests/test_storage_migration.py).
-- Before any migration a **timestamped backup** is written to `backups/`
-  (gitignored). Rollback = copy the backup over `data.json` (Settings → Data &
-  Backups → Restore).
-- Corrupt files are never overwritten: a bad data.json is moved aside to
-  `data.json.corrupt-<timestamp>` and a fresh store is served.
-- **Important:** if you used the old mobile app, revoke the Gemini API key that
-  ships in its git history (`android/lib/ai_parser_port.dart` in older commits)
-  — current code reads the key from `--dart-define=GEMINI_API_KEY` instead.
+- Human-readable `data.json`, local-first. Schema **v4**: additive migration
+  from v3 with a timestamped backup in `backups/` before the first save
+  (Settings → Data & Backups → Restore to roll back). Corrupt files are
+  quarantined, never overwritten — verified by tests.
+- New in v4: schedule blocks, per-session focus records, hourly focus buckets,
+  agent conversations/actions (bounded), task reschedule history.
 
----
+## 🏗️ Documentation & architecture
 
-## 🏗️ Architecture
-
-Eight modular layers (details and data flow in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
+- [docs/V1_AUDIT.md](docs/V1_AUDIT.md) — audit of the inherited codebase
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layers, layout, models, invariants
+- [docs/AGENT_DESIGN.md](docs/AGENT_DESIGN.md) — loop, guards, full tool registry, memory
+- [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) — phases, decisions log
+- [docs/EVALUATION.md](docs/EVALUATION.md) — metrics & methodology
 
 ```text
-UI / chat ─▶ AgentController ─▶ LLM abstraction ─▶ structured extraction
-     │              │                  │                     │
-     │              ▼                  ▼                     ▼
- memory/analytics ◀─ validated tool execution ◀─ intent + args
-                        │
-                        ▼
-            deterministic scheduler ◀─ class routine / study hours
-                        │
-                        ▼
-              optional online research (disclosed, env-keyed)
+UI (ui/ package) → AgentController (loop) → LLM (Ollama) → structured steps
+                          │                       │
+                          ▼                       ▼
+        validated tools (47) → repositories → typed models → data.json (v4)
+                          │
+        planner (multi-day, deadline-aware) ← patterns (learned, disclosed)
 ```
-
-**Deterministic-first:** parsing, scheduling, estimation, and analytics work with
-no model at all; the LLM adds understanding, and its output is always validated
-before anything touches your data. On date conflicts, keyword evidence ("tonight",
-"next wednesday") wins over model inference.
-
-### Agent tools (validated schema, permission classes)
-
-| Tool | Permission | Confirmation |
-| :--- | :--- | :--- |
-| `list_tasks`, `get_task`, `list_subjects`, `get_routine`, `get_availability`, `explain_priorities`, `list_goals`, `get_focus_history`, `get_analytics`, `generate_report` | read | — |
-| `create_task`, `update_task`, `complete_task`, `reopen_task`, `add_subtask`, `assign_subject`, `add_class`, `record_focus_time`, `create_goal`, `update_goal`, `add_milestone`, `complete_milestone` | write | — |
-| `delete_task`, `create_subject`, `generate_daily_plan` (commit), `reschedule_day` | write/destructive | ✅ required |
-
-Every call is schema-validated (unknown arguments rejected), idempotent on
-retries via call IDs, audit-logged, and confirmed when destructive. The LLM
-never touches storage directly — the only path to your data is through these
-tools.
-
----
 
 ## 📱 Mobile companion (Flutter)
 
 ```bash
-cd android
-flutter pub get
+cd android && flutter pub get
 flutter run --dart-define=GEMINI_API_KEY=<key>   # optional; OfflineBrain works without
 ```
-
----
 
 ## 📜 License
 

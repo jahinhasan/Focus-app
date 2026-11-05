@@ -194,7 +194,7 @@ Detailed in [ARCHITECTURE.md](ARCHITECTURE.md) and [AGENT_DESIGN.md](AGENT_DESIG
    the controller, a **typed domain-model layer** with **repository services**
    between tools and `logic.py`, and a **memory engine** with conversational,
    behavioral, and planning stores.
-2. Grow the tool registry from 24 → the official catalog (~36 tools) with the same
+2. Grow the tool registry from 24 to the official catalog (47 registered incl. aliases) with the same
    validation/permission/confirmation shell.
 3. Upgrade the planner to deadline-aware multi-day scheduling that reuses the
    existing deterministic day-builder as its inner step.
