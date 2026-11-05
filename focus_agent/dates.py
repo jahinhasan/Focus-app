@@ -225,3 +225,10 @@ def date_range_days(start_date_str, days):
     except (ValueError, TypeError):
         return []
     return [(d + timedelta(days=i)).isoformat() for i in range(max(0, days))]
+
+
+def shift_date(date_str, days):
+    """YYYY-MM-DD + N days -> YYYY-MM-DD (negative days allowed)."""
+    from datetime import date as _d, timedelta as _td
+    base = _d.fromisoformat(date_str)
+    return (base + _td(days=days)).isoformat()

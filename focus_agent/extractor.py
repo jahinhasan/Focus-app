@@ -16,6 +16,7 @@ import re
 from focus_agent import dates as fdates
 from focus_agent.schemas import (
     ExtractionResult, ExtractedTask, validate_extracted_task, clean_str,
+    valid_date, valid_hhmm,
 )
 
 NUMBER_WORDS = {
@@ -41,6 +42,10 @@ def detect_intent(text):
     """Classify the request without any model. Returns (intent, query_action)."""
     low = (text or "").lower().strip()
 
+    if (re.search(r"\b(don'?t|do not|never)\s+(schedule|plan|book|put)\b", low)
+            or re.search(r"\b(block|blocked|busy|unavailable|occupied)\b", low)) \
+            and extract_time_range(low):
+        return "block_time", None
     if re.search(r"\b(plan|schedule)\b.*\b(day|today|tomorrow|week)\b", low) \
             or re.search(r"\b(daily\s+plan|plan\s+my\s+day|what\s+should\s+i\s+do)\b", low) \
             or re.search(r"\bprepare\s+a\s+revision\s+plan\b", low) \
@@ -299,7 +304,18 @@ def extract_deterministic(text, now=None, settings=None):
     result.intent = intent
     result.query_action = q_action
 
+    if intent == "block_time":
+        block = extract_block(text, now=now, settings=settings)
+        if block:
+            result.blocks.append(block)
+        else:
+            result.question = ("What time should I keep free? (e.g. 'from 10 AM "
+                               "to 12 PM') - I won't guess the hours.")
+        return result
+
     if intent in ("chat", "query", "plan_day"):
+        if intent == "plan_day":
+            result.available_minutes = extract_free_capacity(text)
         return result
 
     if intent == "goal":
@@ -355,10 +371,13 @@ Convert the user's request into JSON. Respond with ONLY a JSON object, no prose.
 
 Schema:
 {
-  "intent": "add_task|update_task|complete_task|delete_task|reschedule|plan_day|query|goal|chat",
-  "query_action": "stats|next_class|today_tasks|weekly_classes|null",
+  "intent": "add_task|update_task|complete_task|delete_task|reschedule|plan_day|block_time|query|goal|chat",
+  "query_action": "stats|next_class|today_tasks|weekly_classes|productivity|null",
   "question": "concise follow-up question or null",
   "reply": "short chat reply when intent=chat, else null",
+  "blocks": [{"title": "...", "days": ["mon"], "date": "YYYY-MM-DD or null",
+              "start": "HH:MM", "end": "HH:MM"}],
+  "available_minutes": integer or null,
   "tasks": [
     {
       "title": "short imperative title",
@@ -381,6 +400,11 @@ Rules:
 - Use null for anything unknown. NEVER invent dates, durations, or subjects.
 - Resolve relative dates against the CURRENT DATE given below.
 - One entry per task; a request may contain several tasks.
+- blocks: when the user says a time is taken (class, busy, "don't schedule
+  X to Y"), list it here with times resolved to 24h HH:MM. Recurring blocks
+  use "days", one-off blocks use "date".
+- available_minutes: when the user names a free-time budget ("I have three
+  hours free"), set it in minutes.
 - task_ref: for move/complete/delete requests, quote the words identifying the existing task.
 - goal: only when the user describes a long-term learning goal or roadmap."""
 
@@ -397,6 +421,102 @@ def looks_like_class_attendance(title):
     estimate (guards against 'attend networking class, ~180min' artifacts).
     """
     return bool(_CLASS_ATTEND_RE.match((title or "").strip()))
+
+
+def extract_time_range(text):
+    """Find 'from 10 AM to 12 PM' / '10-12' / '10:00 to 12:00' style ranges.
+
+    Returns (start_hhmm, end_hhmm) or (None, None). 24h conversion is explicit:
+    an am/pm on one side applies to both when the other omits it and the raw
+    numbers stay valid."""
+    low = (text or "").lower()
+    m = re.search(r"from\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|until|till|through|-|–)\s*"
+                  r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", low)
+    if not m:
+        m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|to)\s*"
+                      r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", low)
+    if not m:
+        return None, None
+
+    def to24(h, mn, ap):
+        h, mn = int(h), int(mn or 0)
+        ap = (ap or "").strip()
+        if ap == "pm" and h < 12:
+            h += 12
+        if ap == "am" and h == 12:
+            h = 0
+        if 0 <= h < 24 and 0 <= mn < 60:
+            return f"{h:02d}:{mn:02d}"
+        return None
+
+    start = to24(m.group(1), m.group(2), m.group(3))
+    end = to24(m.group(4), m.group(5), m.group(6))
+    if not start or not end or end <= start:
+        return None, None
+    return start, end
+
+
+_WEEKDAY_RE = re.compile(r"\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|"
+                         r"monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", re.IGNORECASE)
+_WEEKDAY_KEY = {"mon": "mon", "monday": "mon", "tue": "tue", "tues": "tue",
+                "tuesday": "tue", "wed": "wed", "wednesday": "wed",
+                "thu": "thu", "thur": "thu", "thurs": "thu", "thursday": "thu",
+                "fri": "fri", "friday": "fri", "sat": "sat", "saturday": "sat",
+                "sun": "sun", "sunday": "sun"}
+
+
+def extract_weekdays(text):
+    """Weekday keys mentioned in text (bounded, deduped)."""
+    found = []
+    for m in _WEEKDAY_RE.finditer(text or ""):
+        k = _WEEKDAY_KEY[m.group(1).lower()]
+        if k not in found:
+            found.append(k)
+    return found
+
+
+def extract_free_capacity(text):
+    """'I have three hours free' / '2 hours free' -> minutes or None."""
+    low = (text or "").lower()
+    m = re.search(r"\b(?:have|got)\s+(\d+(?:\.\d+)?|"
+                  + "|".join(NUMBER_WORDS.keys()) + r")\s*(hours?|hrs?|h|minutes?|mins?)\s+free\b",
+                  low)
+    if not m:
+        return None
+    raw = m.group(1)
+    n = NUMBER_WORDS.get(raw)
+    if n is None:
+        try:
+            n = float(raw)
+        except ValueError:
+            return None
+    unit = m.group(2)
+    minutes = int(n * 60) if unit.startswith(("hour", "hr", "h")) else int(n)
+    return minutes if 15 <= minutes <= 16 * 60 else None
+
+
+def extract_block(text, now=None, settings=None):
+    """Parse a 'don't schedule ...' request into a block dict (or None)."""
+    start, end = extract_time_range(text)
+    if not start:
+        return None
+    low = (text or "").lower()
+    title = "Busy"
+    tm = re.search(r"\b(?:have|had|got)\s+(?:a|an|my)?\s*([a-z][a-z \-']{2,40}?)(?=\s+from\b|\s+\d)",
+                   low)
+    if tm:
+        title = tm.group(1).strip()
+        if title.endswith(" class"):
+            title = title.replace(" class", " class").strip()
+    block = {"title": clean_str(title, 120) or "Busy", "start": start, "end": end}
+    days = extract_weekdays(text)
+    if days:
+        block["days"] = days
+    if now is not None:
+        date_str, _matched = fdates.resolve_relative_date(text, now=now, settings=settings)
+        if date_str and not days:
+            block["date"] = date_str
+    return block
 
 
 def extract_with_llm(text, provider, now=None, settings=None, subject_names=None):
@@ -427,6 +547,31 @@ def extract_with_llm(text, provider, now=None, settings=None, subject_names=None
         "stats", "next_class", "today_tasks", "weekly_classes") else None
     result.question = clean_str(raw.get("question"), 300)
     result.reply = clean_str(raw.get("reply"), 2000)
+
+    blocks_raw = raw.get("blocks")
+    if isinstance(blocks_raw, list):
+        for br in blocks_raw[:5]:
+            if not isinstance(br, dict):
+                continue
+            start = valid_hhmm(br.get("start"))
+            end = valid_hhmm(br.get("end"))
+            if not start or not end or end <= start:
+                continue
+            block = {"title": clean_str(br.get("title"), 120) or "Busy",
+                     "start": start, "end": end}
+            days = [d for d in (br.get("days") or [])
+                    if isinstance(d, str) and d.lower()[:3] in
+                    ("mon", "tue", "wed", "thu", "fri", "sat", "sun")]
+            if days:
+                block["days"] = sorted({d.lower()[:3] for d in days})
+            date_v = valid_date(br.get("date"))
+            if date_v:
+                block["date"] = date_v
+            result.blocks.append(block)
+
+    cap = raw.get("available_minutes")
+    if isinstance(cap, (int, float)) and 15 <= cap <= 16 * 60:
+        result.available_minutes = int(cap)
 
     tasks_raw = raw.get("tasks")
     if isinstance(tasks_raw, list):
