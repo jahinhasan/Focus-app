@@ -744,9 +744,17 @@ class AgentController:
         multi_day = "week" in low
         if capacity or multi_day or (day_str and day_str != now.date().isoformat()):
             start = day_str or fdates.today_str(settings)
+            # learned productive hours shape where work lands (disclosed)
+            from focus_agent import patterns as fpatterns
+            hours = fpatterns.productive_hours(self.data)
+            hour_scores = hours["hours"] if hours.get("reliable") else None
             plan = fplanner.plan_range(self.data, start, settings=settings,
                                        now=now, days=7 if multi_day else 1,
-                                       capacity_minutes=capacity, commit=False)
+                                       capacity_minutes=capacity, commit=False,
+                                       hour_scores=hour_scores)
+            if hour_scores:
+                plan.notes.append(f"Placed work using learned productive hours "
+                                  f"({hours['basis']})")
             lines = [f"🗓 **Plan from {plan.start_date}"
                      + (f" to {plan.end_date}**" if multi_day else "**")]
             for d in plan.days:
