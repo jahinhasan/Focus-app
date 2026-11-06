@@ -305,3 +305,4 @@ User Input (Text / 🎤 Voice / 📄 Syllabus PDF in Bangla, Banglish, or Englis
 
 **প্রশ্ন ৫: আপনারা কীভাবে প্রমাণ করেছেন যে এজেন্টটি সঠিকভাবে কাজ করে?**  
 **উত্তর:** আমাদের প্রজেক্টে `evaluate.py` এবং `tests/`-এ **২৩০টি ইউনিট টেস্ট** এবং **৪৯টি রিয়েল-ওয়ার্ল্ড বেঞ্চমার্ক টেস্ট** আছে (যার মধ্যে Extraction Accuracy, Deadline Ambiguity Handling, Subject Matching, Conflict-Free Scheduling, Tool Safety এবং Memory Effectiveness পরীক্ষা করা হয়েছে)। অ্যাপের **📊 Analytics** ট্যাব থেকে ১ ক্লিকেই লাইভ ইভ্যালুয়েশন চালিয়ে **100% (`49/49`)** রেজাল্ট দেখা যায়।
+
