@@ -496,7 +496,7 @@ class AgentController:
                 "subject": t.subject,
                 "due_date": t.due_date,
                 "due_time": t.due_time,
-                "duration_minutes": t.estimated_minutes,
+                "duration_minutes": t.estimated_minutes or 60,
                 "importance": t.importance,
                 "difficulty": t.difficulty,
                 "priority_hint": t.priority_hint,

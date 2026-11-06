@@ -145,6 +145,12 @@ def _eligible_tasks(data, date_str, settings):
         if t.get("status") in ("done", "archived", "missed"):
             continue
         due = t.get("date")
+        # Day-wise roadmap tasks ("Day 2: ...", or linked to a goal) belong to their
+        # target date and should not be pulled into earlier days to cause false overload.
+        if due and due > date_str and (
+            t.get("goal_id") or str(t.get("title") or "").strip().lower().startswith("day ")
+        ):
+            continue
         bucket = urgency_bucket(due, today)
         if bucket == "later":
             # far-future work only fills the plan if it has no pressing rivals;

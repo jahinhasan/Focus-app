@@ -103,15 +103,21 @@ class PlannerView(ctk.CTkFrame):
         elif self.current_plan is not None:
             self._render_plan(self.current_plan, self.current_priorities)
         else:
-            empty = ctk.CTkFrame(self.body, fg_color=COLORS["card"], corner_radius=15)
-            empty.pack(fill="x", padx=10, pady=30)
-            ctk.CTkLabel(empty, text="Generate a plan to see time slots, reasons and overload warnings.\nPlans respect your classes, study window and learned pace.",
-                         text_color=COLORS["text_dim"], font=FONTS["body"], justify="center").pack(pady=30)
+            # Automatically build today's plan on first open so the user sees their schedule right away
+            self.generate_plan()
 
     def _set_date(self, iso):
         self.current_date_str = iso
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, iso)
+        self.generate_plan()
+
+    def _quick_fix_duration(self, task_id, minutes=60):
+        t = get_task_by_id(self.app.data, task_id)
+        if t:
+            t["duration"] = minutes
+            save_data(self.app.data)
+            self.generate_plan()
 
     def generate_plan(self):
         if self._busy_plan():
@@ -187,44 +193,73 @@ class PlannerView(ctk.CTkFrame):
                       hover_color=COLORS["success_dark"], command=apply_plan).pack(side="right")
 
         self._wrappable = []
+        wrap_w = max(280, int(self.winfo_width() - 120)) if self.winfo_width() > 200 else 520
         for s in plan.slots:
             row = ctk.CTkFrame(
-                card, fg_color=COLORS["bg_secondary"], corner_radius=8,
+                card, fg_color=COLORS["bg_secondary"], corner_radius=10,
                 border_width=1, border_color=COLORS["border"]
             )
-            row.pack(fill="x", padx=12, pady=4)
+            row.pack(fill="x", padx=12, pady=5)
+
+            top_line = ctk.CTkFrame(row, fg_color="transparent")
+            top_line.pack(fill="x", padx=10, pady=(8, 2))
+
             mark = "📘" if s.fixed else "🎯"
-            ctk.CTkLabel(row, text=f"{mark} {s.start}–{s.end}", font=FONTS["subheader"],
-                         width=115, text_color=COLORS["accent"]).pack(side="left", padx=10, pady=8)
+            ctk.CTkLabel(top_line, text=f"{mark} {s.start}–{s.end}", font=FONTS["subheader"],
+                         width=112, anchor="w", text_color=COLORS["accent"]).pack(side="left", padx=(2, 8))
 
             if not s.fixed and hasattr(self.app, "start_focus_for_task"):
-                # Calculate slot duration in minutes
-                dur_m = getattr(s, "minutes", None) or 25
+                # Calculate exact slot duration in minutes from start/end
+                s_min = fdates.hhmm_to_minutes(s.start) or 0
+                e_min = fdates.hhmm_to_minutes(s.end) or (s_min + 25)
+                dur_m = max(5, e_min - s_min)
                 ctk.CTkButton(
-                    row, text="▶ Start Focus", width=105, height=28,
+                    top_line, text=f"▶ Start ({dur_m}m)", width=112, height=28,
                     fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
                     text_color="white", corner_radius=6, font=FONTS["small"],
                     command=lambda t=s.title, d=dur_m: self.app.start_focus_for_task(t, d)
-                ).pack(side="right", padx=10, pady=6)
+                ).pack(side="right", padx=(8, 2))
 
             title = s.title + (f"  (part {s.chunk}/{s.chunks})" if s.chunks > 1 else "")
-            ctk.CTkLabel(row, text=title, font=FONTS["subheader"], text_color=COLORS["text"]).pack(side="left", padx=4)
-            rlbl = ctk.CTkLabel(row, text=s.reason, font=FONTS["tiny"],
-                                text_color=COLORS["text_dim"], wraplength=280,
-                                justify="left")
-            rlbl.pack(side="right", padx=10, pady=4)
-            self._wrappable.append(rlbl)
+            tlbl = ctk.CTkLabel(
+                top_line, text=title, font=FONTS["subheader"],
+                text_color=COLORS["text"], wraplength=max(200, wrap_w - 180),
+                justify="left", anchor="w"
+            )
+            tlbl.pack(side="left", fill="x", expand=True, padx=4)
+            self._wrappable.append(tlbl)
+
+            if s.reason:
+                rlbl = ctk.CTkLabel(
+                    row, text=f"💡 {s.reason}", font=FONTS["tiny"],
+                    text_color=COLORS["text_dim"], wraplength=wrap_w,
+                    justify="left", anchor="w"
+                )
+                rlbl.pack(fill="x", padx=14, pady=(0, 7), anchor="w")
+                self._wrappable.append(rlbl)
 
         # Unscheduled
         for u in plan.unscheduled:
-            row = ctk.CTkFrame(card, fg_color=COLORS["error"], corner_radius=8)
-            row.pack(fill="x", padx=12, pady=3)
-            ctk.CTkLabel(row, text=f"⚠ {u['title']}", font=FONTS["small"],
-                         text_color="#1a1a1a").pack(anchor="w", padx=10, pady=(4, 0))
+            row = ctk.CTkFrame(
+                card, fg_color=COLORS["card_highlight"], corner_radius=8,
+                border_width=1, border_color=COLORS["warning"]
+            )
+            row.pack(fill="x", padx=12, pady=4)
+            u_top = ctk.CTkFrame(row, fg_color="transparent")
+            u_top.pack(fill="x", padx=10, pady=(6, 2))
+            ctk.CTkLabel(u_top, text=f"⚠ {u['title']}", font=FONTS["small"],
+                         text_color=COLORS["warning"]).pack(side="left")
+            if "no duration estimate" in (u.get("reason") or "") and u.get("task_id"):
+                ctk.CTkButton(
+                    u_top, text="⏱ Set 60m & Schedule", width=145, height=24,
+                    fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
+                    text_color="white", corner_radius=6, font=FONTS["tiny"],
+                    command=lambda tid=u["task_id"]: self._quick_fix_duration(tid, 60)
+                ).pack(side="right")
             ulbl = ctk.CTkLabel(row, text=u["reason"], font=FONTS["tiny"],
-                                text_color="#1a1a1a", wraplength=560,
+                                text_color=COLORS["text_dim"], wraplength=wrap_w,
                                 justify="left")
-            ulbl.pack(anchor="w", padx=10, pady=(0, 4))
+            ulbl.pack(anchor="w", padx=10, pady=(0, 6))
             self._wrappable.append(ulbl)
 
         for note in plan.notes:
