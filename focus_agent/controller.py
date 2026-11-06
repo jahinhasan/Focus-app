@@ -755,6 +755,7 @@ class AgentController:
         created = next((r for r in outcome.tool_results
                         if r.tool == "create_goal" and r.ok), None)
         goal_id = (created.data or {}).get("goal_id") if created else None
+        day_tasks_created = []
         if goal_id:
             goal_obj = fgoals.get_goal(self.data, goal_id)
             if goal_obj:
@@ -769,30 +770,57 @@ class AgentController:
                         ms_obj["estimated_minutes"] = mm.get("estimated_minutes")
                 if not goal_obj.get("target_date") and draft["milestones"]:
                     goal_obj["target_date"] = draft["milestones"][-1].get("target_date")
-                from logic import save_data
+
+                # Automatically create Day-Wise Dashboard study tasks (Day 1 = Today, Day 2 = Tomorrow, ...)
+                from datetime import timedelta as _td
+                from logic import add_task_logic, save_data
+                subj_label = _re.sub(r"^(?:learn|master|study)\s+", "", title, flags=_re.IGNORECASE).strip() or title
+                existing_titles = {(t.get("title") or "").lower() for t in self.data.get("tasks", [])}
+                for idx, mm in enumerate(draft["milestones"], start=1):
+                    day_date = (now.date() + _td(days=idx - 1)).isoformat()
+                    clean_ms = _re.sub(r"^\d+[\.\)]\s*", "", mm["title"])
+                    clean_ms = _re.sub(r"\s*\(~\d+h\)\s*$", "", clean_ms).strip()
+                    task_title = f"Day {idx}: {clean_ms}"
+                    if task_title.lower() not in existing_titles:
+                        add_task_logic(
+                            self.data,
+                            title=task_title,
+                            deadline=day_date,
+                            duration=60,
+                            subject=subj_label,
+                            importance=2,
+                            difficulty=2,
+                            goal_id=goal_id,
+                            notes=f"Part of '{goal_obj['title']}' roadmap (Milestone {idx}/{len(draft['milestones'])})"
+                        )
+                        day_tasks_created.append((idx, day_date, clean_ms))
+
                 save_data(self.data)
                 if created:
                     created.message = (
                         f"Created goal '{goal_obj['title']}' with "
-                        f"{len(goal_obj['milestones'])} milestone(s)"
+                        f"{len(goal_obj['milestones'])} milestone(s) and "
+                        f"{len(day_tasks_created)} day-wise dashboard tasks"
                     )
 
         ms_lines = []
+        from datetime import timedelta as _td2
         for idx, mm in enumerate(draft["milestones"], start=1):
             m_title = mm["title"]
-            # Avoid double numbering like "1. 1. ..."
             if not _re.match(r"^\d+[\.\)]\s*", m_title):
                 m_title = f"{idx}. {m_title}"
-            hrs = round((mm.get("estimated_minutes") or 360) / 60, 1)
-            hrs_txt = f"{int(hrs)}h" if hrs == int(hrs) else f"{hrs}h"
-            ms_lines.append(f"• **{m_title}**  _(📅 Target: {mm['target_date']} · ~{hrs_txt} study)_")
+            day_date = (now.date() + _td2(days=idx - 1)).isoformat()
+            day_tag = "Today" if idx == 1 else ("Tomorrow" if idx == 2 else day_date)
+            ms_lines.append(f"• **Day {idx} ({day_tag} — {day_date}):** {m_title}")
 
         friendly = (
-            f"🎯 **Goal & Roadmap Created: {title}**\n"
-            f"I have created your goal with **{len(draft['milestones'])} step-by-step milestones** "
-            f"and saved everything to your **Goals & Roadmaps** tab:\n\n"
+            f"🎯 **Goal & Day-Wise Schedule Created: {title}**\n"
+            f"I have created your roadmap with **{len(draft['milestones'])} milestones** AND added "
+            f"**Day-Wise Study Tasks** directly to your **Dashboard** (starting today!):\n\n"
             + "\n".join(ms_lines)
-            + "\n\n💡 _Tip: Open the **🎯 Goals & Roadmaps** tab from the sidebar anytime to track your progress and check off each milestone as you finish it!_"
+            + "\n\n✅ **Where to find them:**\n"
+            "• 🏠 **Dashboard:** Today's study session (**Day 1**) and your **Day-Wise Upcoming Schedule** are now live on your Dashboard!\n"
+            "• 🎯 **Goals & Roadmaps:** Track overall milestone progress anytime."
         )
         return friendly
 

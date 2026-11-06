@@ -419,10 +419,22 @@ class TodayView(ctk.CTkScrollableFrame):
                 up_hdr = ctk.CTkFrame(self.list_container, fg_color="transparent")
                 up_hdr.pack(fill="x", padx=12, pady=(14, 4))
                 ctk.CTkLabel(
-                    up_hdr, text=f"📅 Upcoming Deadlines ({len(upcoming_tasks)})",
+                    up_hdr, text=f"🗓️ Day-Wise Upcoming Schedule & Deadlines ({len(upcoming_tasks)})",
                     font=FONTS["subheader"], text_color=COLORS["accent"]
                 ).pack(side="left")
+                tmr_str = (datetime.now().date() + timedelta(days=1)).isoformat()
+                last_date = None
                 for task in upcoming_tasks:
+                    t_date = task.get("date")
+                    if t_date and t_date != last_date:
+                        last_date = t_date
+                        day_label = f"Tomorrow ({t_date})" if t_date == tmr_str else t_date
+                        day_banner = ctk.CTkFrame(self.list_container, fg_color="transparent")
+                        day_banner.pack(fill="x", padx=16, pady=(6, 2))
+                        ctk.CTkLabel(
+                            day_banner, text=f"📌 {day_label}",
+                            font=FONTS["small"], text_color=COLORS["text_dim"]
+                        ).pack(side="left")
                     self.draw_task_card(task)
 
         # Compact Daily Habits section at bottom of Dashboard

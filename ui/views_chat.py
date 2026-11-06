@@ -451,7 +451,7 @@ class ChatView(ctk.CTkFrame):
         if not touched:
             return
         if any(t in ("create_task", "update_task", "complete_task", "reopen_task",
-                     "delete_task", "add_subtask", "assign_subject") for t in touched):
+                     "delete_task", "add_subtask", "assign_subject", "create_goal") for t in touched):
             if "today" in self.app.views:
                 self.app.views["today"].render()
             self.app.refresh_xp()
