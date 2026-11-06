@@ -49,20 +49,29 @@ def today_str(settings=None):
     return now_here(settings).date().isoformat()
 
 
+_BN_DIGIT_MAP = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
+def normalize_bn_digits(text):
+    """Convert Bengali numerals (০-৯) to ASCII digits (0-9)."""
+    return (text or "").translate(_BN_DIGIT_MAP)
+
+
 def resolve_relative_date(text, now=None, settings=None):
     """Resolve a natural-language date fragment to YYYY-MM-DD.
 
-    Supports: today, tonight, tomorrow, day-after-tomorrow, this/next
-    <weekday>, <weekday> (next occurrence), "in N days/weeks",
-    "end of week", "end of month", explicit "23 jan"/"jan 23"/"2026-01-23",
-    numeric "23/01" or "23-01" (day/month).
+    Supports English, Bangla (বাংলা), and Banglish:
+    today/aj/ajke/আজ, tonight/aj rate/আজ রাতে, tomorrow/kal/kalke/কাল/আগামীকাল,
+    day-after-tomorrow/porshu/পরশু, this/next <weekday> (incl. shombar..robibar
+    and সোমবার..রবিবার), "in N days/weeks", "end of week", "end of month",
+    explicit "23 jan"/"jan 23"/"2026-01-23", numeric "23/01" or "23-01".
     Returns (date_str_or_None, matched_phrase_or_None).
     Unknown values resolve to (None, None) - callers must not invent dates.
     """
     import re
     if now is None:
         now = now_here(settings)
-    low = (text or "").lower()
+    low = normalize_bn_digits(text or "").lower()
 
     # ISO explicit date
     m = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", low)
@@ -73,23 +82,26 @@ def resolve_relative_date(text, now=None, settings=None):
         except ValueError:
             pass
 
-    # today / tonight / tomorrow / day after tomorrow
-    m = re.search(r"\bday\s+after\s+tomorrow\b", low)
+    # today / tonight / tomorrow / day after tomorrow (English + Banglish + Bangla + common typos)
+    m = re.search(r"(?:\bday\s+after\s+tomorrow\b|\bporshu\b|\bporoshu\b|আগামী\s*পরশু|পরশু)", low)
     if m:
         return (now.date() + timedelta(days=2)).isoformat(), m.group(0)
-    m = re.search(r"\b(tomorrow|tmr|tmrw)\b", low)
+    m = re.search(r"(?:\b(?:tomorrow|tommorow|tomorow|tommorrow|tmr|tmrw|agami\s*kal|agamikal|kalker|kalke|kal)\b|আগামীকাল|কালকের|কালকে|কাল)", low)
     if m:
         return (now.date() + timedelta(days=1)).isoformat(), m.group(0)
-    m = re.search(r"\b(tonight|today)\b", low)
+    m = re.search(r"(?:\b(?:tonight|today|todat|tday|ajke|ajker|ajk|aj)\b|আজকে|আজকের|আজ)", low)
     if m:
         return now.date().isoformat(), m.group(0)
 
-    # "in N days/weeks"
+    # "in N days/weeks" or Banglish "N din por"
     m = re.search(r"\bin\s+(\d{1,3})\s*(day|days|week|weeks)\b", low)
     if m:
         n = int(m.group(1))
         delta = timedelta(days=n if m.group(2).startswith("day") else n * 7)
         return (now.date() + delta).isoformat(), m.group(0)
+    m = re.search(r"\b(\d{1,3})\s*(?:din|দিন)\s*(?:por|pore|পরে|পর)\b", low)
+    if m:
+        return (now.date() + timedelta(days=int(m.group(1)))).isoformat(), m.group(0)
 
     # end of week / month
     m = re.search(r"\bend\s+of\s+(the\s+)?week\b", low)
@@ -102,23 +114,32 @@ def resolve_relative_date(text, now=None, settings=None):
         last = nxt.replace(day=1) - timedelta(days=1)
         return last.isoformat(), m.group(0)
 
-    # this/next <weekday> or bare <weekday>.
-    # Rule: the next occurrence strictly after today (0 is not allowed, so a
-    # bare "friday" said on a friday means next friday, not today - deadlines
-    # stated with a weekday should not silently land on an already-passing day).
-    # "next" and bare weekday behave identically; documented and tested.
+    # this/next <weekday> or bare <weekday> (English + Banglish + Bangla).
     weekdays = {
-        "monday": 0, "mon": 0, "tuesday": 1, "tue": 1, "tues": 1,
-        "wednesday": 2, "wed": 2, "thursday": 3, "thu": 3, "thur": 3, "thurs": 3,
-        "friday": 4, "fri": 4, "saturday": 5, "sat": 5, "sunday": 6, "sun": 6,
+        "monday": 0, "mon": 0, "shombar": 0, "sombar": 0, "সোমবার": 0,
+        "tuesday": 1, "tue": 1, "tues": 1, "mongolbar": 1, "mangalbar": 1, "মঙ্গলবার": 1,
+        "wednesday": 2, "wed": 2, "budhbar": 2, "বুধবার": 2,
+        "thursday": 3, "thu": 3, "thur": 3, "thurs": 3, "brihoshpotibar": 3, "brihospotibar": 3, "বৃহস্পতিবার": 3,
+        "friday": 4, "fri": 4, "shukrobar": 4, "sukrobar": 4, "শুক্রবার": 4,
+        "saturday": 5, "sat": 5, "shonibar": 5, "sonibar": 5, "শনিবার": 5,
+        "sunday": 6, "sun": 6, "robibar": 6, "rabibar": 6, "রবিবার": 6,
     }
-    m = re.search(r"\b(?:(next|this)\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b", low)
-    if m and m.group(2):
-        target = weekdays[m.group(2)]
-        days_ahead = (target - now.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
-        return (now.date() + timedelta(days=days_ahead)).isoformat(), m.group(0)
+    m = re.search(
+        r"(?:\b(?:(next|this|agami)\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+        r"mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|"
+        r"shombar|sombar|mongolbar|mangalbar|budhbar|brihoshpotibar|brihospotibar|"
+        r"shukrobar|sukrobar|shonibar|sonibar|robibar|rabibar)\b|"
+        r"(?:আগামী\s+)?(সোমবার|মঙ্গলবার|বুধবার|বৃহস্পতিবার|শুক্রবার|শনিবার|রবিবার))",
+        low
+    )
+    if m:
+        day_token = m.group(2) or m.group(3)
+        if day_token in weekdays:
+            target = weekdays[day_token]
+            days_ahead = (target - now.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7
+            return (now.date() + timedelta(days=days_ahead)).isoformat(), m.group(0)
 
     # "23 jan" / "jan 23" style
     months = {
@@ -169,28 +190,65 @@ def _month_day(day, month, now):
 
 
 def parse_time_of_day(text):
-    """Extract a HH:MM time or daypart hint from text.
+    """Extract a HH:MM time or daypart hint from text (English, Banglish, Bangla).
 
-    Returns (hh_mm_str_or_None, matched_or_None). "tonight" -> 20:00,
-    "morning" -> 09:00, "afternoon" -> 14:00, "evening" -> 19:00,
-    "at 3pm" / "at 15:30" -> parsed.
+    Returns (hh_mm_str_or_None, matched_or_None). "tonight"/"raate" -> 20:00,
+    "morning"/"shokale" -> 09:00, "afternoon"/"dupure" -> 14:00, "evening"/"bikale" -> 19:00,
+    "at 3pm" / "at 15:30" / "rat 8 tar modhe" / "bikal 5 tay" -> parsed.
     """
     import re
-    low = (text or "").lower()
+    low = normalize_bn_digits(text or "").lower()
     m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", low)
     if m:
         h = int(m.group(1)) % 12
         if m.group(3) == "pm":
             h += 12
         return f"{h:02}:{m.group(2) or '00'}", m.group(0)
-    m = re.search(r"\bat\s+(\d{1,2}):(\d{2})\b", low)
+    m = re.search(r"\b(?:at|by|before)\s+(\d{1,2}):(\d{2})\b", low)
     if m:
         h, mn = int(m.group(1)), int(m.group(2))
         if 0 <= h < 24 and 0 <= mn < 60:
             return f"{h:02}:{mn:02}", m.group(0)
-    for hint, hh in (("tonight", 20), ("this evening", 19), ("evening", 19),
-                     ("afternoon", 14), ("noon", 12), ("morning", 9)):
-        if hint in low:
+    # Banglish / Bangla explicit hour ("rat 8 tar modhe", "bikal 5 tay", "shokal 10 ta", "রাত ৮টার মধ্যে")
+    m = re.search(
+        r"(?:(rat|raat|raate|rate|রাত|রাতে|sondha|shondha|sondhay|shondhay|সন্ধ্যা|সন্ধ্যায়|সন্ধ্যায়|"
+        r"bikal|bikale|বিকাল|বিকেলে|dupur|dupure|দুপুর|দুপুরে|"
+        r"shokal|sokal|shokale|sokale|সকাল|সকালে|ভোর|bhor)\s+)?"
+        r"\b(\d{1,2})(?::(\d{2}))?\s*(?:tar|tay|ta|টার|টায়|টায়|টা)\b"
+        r"(?:\s*(?:modhe|moddhe|মধ্যে|নাগাদ|nagad|porjonto|পর্যন্ত))?",
+        low
+    )
+    if m:
+        daypart = (m.group(1) or "").strip()
+        h = int(m.group(2))
+        mn = int(m.group(3) or 0)
+        if 1 <= h <= 12 and 0 <= mn < 60:
+            pm_parts = ("rat", "raat", "raate", "rate", "রাত", "রাতে",
+                        "sondha", "shondha", "sondhay", "shondhay", "সন্ধ্যা", "সন্ধ্যায়", "সন্ধ্যায়",
+                        "bikal", "bikale", "বিকাল", "বিকেলে",
+                        "dupur", "dupure", "দুপুর", "দুপুরে")
+            am_parts = ("shokal", "sokal", "shokale", "sokale", "সকাল", "সকালে", "ভোর", "bhor")
+            if daypart in pm_parts:
+                if h < 12:
+                    h += 12
+            elif daypart in am_parts:
+                if h == 12:
+                    h = 0
+            else:
+                # No explicit daypart: 1..7 defaults to PM (13:00..19:00)
+                if 1 <= h <= 7:
+                    h += 12
+            return f"{h:02}:{mn:02}", m.group(0)
+    for hint, hh in (
+        ("tonight", 20), ("this evening", 19), ("evening", 19),
+        ("afternoon", 14), ("noon", 12), ("morning", 9),
+        ("raate", 20), ("rate", 20), ("raat", 20), ("rat", 20), ("রাতে", 20), ("রাত", 20),
+        ("sondhay", 19), ("shondhay", 19), ("সন্ধ্যায়", 19), ("সন্ধ্যায়", 19),
+        ("bikale", 16), ("bikal", 16), ("বিকেলে", 16), ("বিকাল", 16),
+        ("dupure", 14), ("dupur", 14), ("দুপুরে", 14), ("দুপুর", 14),
+        ("shokale", 9), ("sokale", 9), ("shokal", 9), ("sokal", 9), ("সকালে", 9), ("সকাল", 9),
+    ):
+        if re.search(rf"(?:\b{re.escape(hint)}\b)" if hint.isascii() else re.escape(hint), low):
             return f"{hh:02}:00", hint
     return None, None
 

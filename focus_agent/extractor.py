@@ -23,61 +23,76 @@ NUMBER_WORDS = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
     "twelve": 12, "half": 0.5,
+    "ek": 1, "dui": 2, "tin": 3, "char": 4, "pach": 5, "choy": 6,
+    " এক ": 1, "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5, "ছয়": 6,
 }
 
-TASK_NOUNS = ("assignment", "homework", "exam", "test", "quiz", "project",
-              "essay", "report", "presentation", "lab", "reading", "revision",
-              "practice", "task", "submission", "proposal", "thesis")
+TASK_NOUNS = ("assignment", "assignmant", "asignmant", "assigment", "assinment",
+              "homework", "homewrok", "exam", "exm", "test", "quiz", "quize",
+              "project", "projct", "essay", "report", "presentation", "presentaion",
+              "lab", "reading", "revision", "practice", "task", "submission",
+              "proposal", "thesis", "porikkha", "পরীক্ষা", "এসাইনমেন্ট", "অ্যাসাইনমেন্ট", "প্রজেক্ট")
 
 # Keywords whose deadline is material - a missing due date triggers a question
-DEADLINE_SENSITIVE = ("exam", "submission", "submit", "deadline", "due",
-                      "assignment", "homework", "project", "test", "quiz",
+DEADLINE_SENSITIVE = ("exam", "exm", "submission", "submit", "deadline", "due",
+                      "assignment", "assignmant", "asignmant", "assigment", "assinment",
+                      "homework", "homewrok", "project", "projct", "test", "quiz", "quize",
                       "application", "apply", "register", "registration",
-                      "hand in", "hand-in", "turn in", "scholarship", "enroll")
+                      "hand in", "hand-in", "turn in", "scholarship", "enroll",
+                      "porikkha", "পরীক্ষা", "জমা", "joma")
 
 
 # ==================== DETERMINISTIC PARSER ====================
 
 def detect_intent(text):
     """Classify the request without any model. Returns (intent, query_action)."""
-    low = (text or "").lower().strip()
+    low = fdates.normalize_bn_digits(text or "").lower().strip()
 
     if (re.search(r"\b(don'?t|do not|never)\s+(schedule|plan|book|put)\b", low)
-            or re.search(r"\b(block|blocked|busy|unavailable|occupied)\b", low)) \
+            or re.search(r"\b(block|blocked|busy|unavailable|occupied|byasto|ব্যস্ত)\b", low)) \
             and extract_time_range(low):
         return "block_time", None
-    if re.search(r"\b(plan|schedule)\b.*\b(day|today|tomorrow|week)\b", low) \
+    if re.search(r"\b(plan|schedule)\b.*\b(day|today|tomorrow|week|aj|ajke|ajker|kal|kalke)\b", low) \
             or re.search(r"\b(daily\s+plan|plan\s+my\s+day|what\s+should\s+i\s+do)\b", low) \
+            or re.search(r"\b(plan\s+koro|routine\s+koro|ajker\s+plan|kalker\s+plan|ki\s+korbo)\b", low) \
+            or re.search(r"(প্ল্যান\s*করো|রুটিন\s*করো|আজকের\s*প্ল্যান|কালকের\s*প্ল্যান|কী\s*করব|কি\s*করব)", low) \
             or re.search(r"\bprepare\s+a\s+revision\s+plan\b", low) \
             or re.search(r"\brevision\s+plan\b", low) \
             or re.search(r"\bplan\b.*\b(pending|tasks|assignments|everything|work)\b", low):
         return "plan_day", None
     if re.search(r"^\s*(move|reschedule|push|shift|postpone|delay)\b", low) or \
             re.search(r"\bmove\b.*\btask\b", low) and re.search(r"\b(move|reschedule)\b", low) or \
-            re.search(r"\b(reschedule|postpone|delay)\b", low):
+            re.search(r"\b(reschedule|postpone|delay|pechiye|pichiye)\b", low) or \
+            re.search(r"(পিছিয়ে|পিছিয়ে\s*দাও|রিশিডিউল)", low):
         return "reschedule", None
-    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed)\b", low):
+    if re.search(r"\b(finished|completed|done with|mark.*(done|complete)|i completed|shesh\s+korechi|sesh\s+korechi|komplit)\b", low) or \
+            re.search(r"(শেষ\s*করেছি|কমপ্লিট\s*করেছি|হয়ে\s*গেছে|হয়ে\s*গেছে)", low):
         return "complete_task", None
-    if re.search(r"^\s*(delete|remove)\b", low):
+    if re.search(r"^\s*(delete|remove|bad\s+dao|muche\s+felo)\b", low) or \
+            re.search(r"^(ডিলিট|মুছে\s*ফেলো|বাদ\s*দাও)", low):
         return "delete_task", None
     if re.search(r"\b(goal|roadmap|milestone|learning path|master\s+plan)\b", low) or \
             re.search(r"\bi\s+(want|would like)\s+to\s+(learn|master|study)\b", low) or \
+            re.search(r"\b(ami\s+.*\s+shikhte\s+chai|shikhte\s+chai)\b", low) or \
+            re.search(r"(শিখতে\s*চাই|রোডম্যাপ)", low) or \
             re.search(r"\bmy goal is\b", low):
         return "goal", None
     if re.match(r"^(analyze|analysis|how productive|productivity)\b", low):
         return "query", "productivity"
-    if re.match(r"^(what|when|where|which|who|how much|how many|how long|show|list|tell|do i have)\b", low):
+    if re.match(r"^(what|when|where|which|who|how much|how many|how long|show|list|tell|do i have|kobe|kokhon|ki\s+ki)\b", low) or \
+            re.search(r"(কবে|কখন|কী\s*কী\s*কাজ|নেক্সট\s*ক্লাস)", low):
         action = None
         if re.search(r"\bxp\b|\blevel\b|\bprogress\b|productivity", low):
             action = "stats"
-        elif re.search(r"\bnext class\b|\bnext lecture\b", low):
+        elif re.search(r"\bnext class\b|\bnext lecture\b|\bporer\s+class\b|নেক্সট\s*ক্লাস|পরের\s*ক্লাস", low):
             action = "next_class"
-        elif re.search(r"\b(week|weekly)\b", low):
+        elif re.search(r"\b(week|weekly|soptah|সপ্তাহ)\b", low):
             action = "weekly_classes"
-        elif re.search(r"\b(today|tonight)\b|\bschedule\b", low):
+        elif re.search(r"\b(today|tonight|aj|ajke|ajker)\b|\bschedule\b|আজ|আজকে|আজকের", low):
             action = "today_tasks"
         return "query", action
-    if re.match(r"^(hi|hello|hey|thanks|thank you|good (morning|evening|afternoon))\b", low):
+    if re.match(r"^(hi|hello|hey|thanks|thank you|good (morning|evening|afternoon)|salam|assalamu|hlw|ki\s+obostha|kemon\s+acho)\b", low) or \
+            re.match(r"^(হাই|হ্যালো|সালাম|কেমন\s*আছো|ধন্যবাদ)", low):
         return "chat", None
     return "add_task", None
 
@@ -163,23 +178,26 @@ def clean_task_ref(text):
 
 
 def extract_duration(text):
-    """Find estimated duration. Returns (minutes_or_None, matched_or_None)."""
-    low = (text or "").lower()
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:-\s*)?(hours?|hrs?|h)\b", low)
+    """Find estimated duration (English, Banglish, Bangla). Returns (minutes_or_None, matched_or_None)."""
+    low = fdates.normalize_bn_digits(text or "").lower()
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:-\s*)?(hours?|hrs?|h|ghonta|ghanta|ঘণ্টা|ঘন্টা)(?:\b|(?=\s|$|[.,;]))", low)
     if m:
         return int(float(m.group(1)) * 60), m.group(0)
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:-\s*)?(minutes?|mins?|m)\b", low)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:-\s*)?(minutes?|mins?|m|minit|মিনিট)(?:\b|(?=\s|$|[.,;]))", low)
     if m and "h" not in m.group(0):
         return int(float(m.group(1))), m.group(0)
-    m = re.search(r"\bhalf\s+an\s+hour\b", low)
+    m = re.search(r"(?:\bhalf\s+an\s+hour\b|\badha\s+ghonta\b|আধা\s*ঘণ্টা|আধা\s*ঘন্টা)", low)
     if m:
         return 30, m.group(0)
-    m = re.search(r"\b(?:an\s+hour\s+and\s+a\s+half|one\s+and\s+a\s+half\s+hours)\b", low)
+    m = re.search(r"(?:\b(?:an\s+hour\s+and\s+a\s+half|one\s+and\s+a\s+half\s+hours|der\s+ghonta)\b|দেড়\s*ঘণ্টা|দেড়\s*ঘণ্টা)", low)
     if m:
         return 90, m.group(0)
-    m = re.search(r"\b(two|three|four|five|six|one)\s+hours?\b", low)
+    m = re.search(r"\b(two|three|four|five|six|one|ek|dui|tin|char|pach|choy)\s+(?:hours?|ghonta|ghanta)\b", low)
     if m:
-        return NUMBER_WORDS[m.group(1)] * 60, m.group(0)
+        return int(NUMBER_WORDS[m.group(1)] * 60), m.group(0)
+    m = re.search(r"(এক|দুই|তিন|চার|পাঁচ|ছয়)\s*(?:ঘণ্টা|ঘন্টা)", low)
+    if m:
+        return int(NUMBER_WORDS[m.group(1)] * 60), m.group(0)
     m = re.search(r"\b(\d+)\s*h\b", low)
     if m:
         return int(m.group(1)) * 60, m.group(0)
@@ -193,22 +211,22 @@ def _number_word(n):
 def extract_importance(text):
     """Return (importance_or_None, priority_hint_or_None)."""
     low = (text or "").lower()
-    if re.search(r"\b(urgent|critical|asap|highest priority|very important)\b", low):
+    if re.search(r"\b(urgent|critical|asap|highest priority|very important|khub\s+joruri|khub\s+dorkar)\b|(?:খুব\s*জরুরি|জরুরি)", low):
         return 3, 90
-    if re.search(r"\b(important|high priority|priority)\b", low):
+    if re.search(r"\b(important|high priority|priority|joruri|dorkar|guruttopurno)\b|(?:গুরুত্বপূর্ণ|দরকার)", low):
         return 3, 70
-    if re.search(r"\b(low priority|whenever|no rush|someday|backlog)\b", low):
+    if re.search(r"\b(low priority|whenever|no rush|someday|backlog|pore\s+korleo\s+hobe)\b", low):
         return 1, 20
     return None, None
 
 
 def extract_difficulty(text):
     low = (text or "").lower()
-    if re.search(r"\b(very (hard|difficult|tough)|challenging)\b", low):
+    if re.search(r"\b(very (hard|difficult|tough)|challenging|khub\s+kothin|onek\s+kothin)\b|(?:খুব\s*কঠিন|অনেক\s*কঠিন)", low):
         return 3
-    if re.search(r"\b(hard|difficult|tough)\b", low):
+    if re.search(r"\b(hard|difficult|tough|kothin)\b|কঠিন", low):
         return 3
-    if re.search(r"\b(easy|simple|quick|light)\b", low):
+    if re.search(r"\b(easy|simple|quick|light|sohoj|shohoj)\b|সহজ", low):
         return 1
     return None
 
@@ -217,43 +235,62 @@ def extract_subject_mention(text):
     """Heuristic: subject-ish word(s) before a task noun ('AI assignment')."""
     low = (text or "").lower()
     nouns = "|".join(TASK_NOUNS)
-    m = re.search(rf"\b(?:my|the|a|an)?\s*([a-z][\w+-]*(?:\s+[a-z][\w+-]*)?)\s+(?:{nouns})\b", low)
+    m = re.search(rf"\b(?:my|the|a|an|amar)?\s*([a-z][\w+-]*(?:\s+[a-z][\w+-]*)?)\s+(?:{nouns})\b", low)
     if m:
         cand = m.group(1).strip()
         # drop leading verbs/fillers
-        cand = re.sub(r"^(add|create|new|do|finish|complete|submit|prepare|make|have|need|want|to|for)\s+",
+        cand = re.sub(r"^(add|create|new|do|finish|complete|submit|prepare|make|have|need|want|to|for|amar|kal|kalke|aj|ajke|porshu|also|and|tay|tar|ta|am|pm)\s+",
                       "", cand).strip()
-        cand = re.sub(r"\b(tomorrow|today|tonight|next|this|by|due|about|it|will|take|for|the|my)\b", "", cand).strip()
-        if cand and cand not in ("i", "me", "we"):
+        cand = re.sub(r"\b(tomorrow|tommorow|today|tonight|next|this|by|due|about|it|will|take|for|the|my|a|an|also|and|amar|kal|kalke|aj|ajke|porshu|ektu|ekta|tay|tar|ta|am|pm|shokal|shokale|bikal|bikale|rat|raat|raate|dupur|dupure)\b", "", cand).strip()
+        cand = re.sub(r"\s+", " ", cand).strip()
+        if cand and cand not in ("i", "me", "we", "amar", "a", "an", "the"):
             return cand
     return None
 
 
-def clean_title(text, due_matched=None, dur_matched=None):
+def clean_title(text, due_matched=None, dur_matched=None, time_matched=None):
     """Strip request scaffolding into a task title."""
     t = text or ""
+    if time_matched:
+        t = re.sub(re.escape(time_matched), " ", t, flags=re.IGNORECASE)
+    if due_matched:
+        t = re.sub(re.escape(due_matched), " ", t, flags=re.IGNORECASE)
+    if dur_matched:
+        t = re.sub(re.escape(dur_matched), " ", t, flags=re.IGNORECASE)
     for pattern in (r"^\s*(please\s+)?(can you\s+)?(add|create|make|new|schedule|set up)\b",
                     r"^\s*(i\s+)?(need|want|have|should|must)\s+(to\s+)?",
+                    r"^\s*(amar\s+|আমার\s+|amake\s+|আমাকে\s+)",
                     r"^\s*task\s*[:,-]?\s*", r"^\s*to\s+do\s*[:,-]?\s*",
                     r"\bit\s+will\s+take\s+about?\s+\S+(\s+\S+)?",
                     r"\bit'?s?\s+(going to\s+)?take\s+\S+(\s+\S+)?",
                     r"\bwill\s+take\s+about?\s+\S+(\s+\S+)?",
                     r"\babout\s+\d+\s*(hours?|hrs?|minutes?|mins?)",
                     r"\bthis\s+(is\s+)?(urgent|important|critical)\b",
-                    r"\b(urgent|asap|high priority|very important|important)\b",
+                    r"\b(urgent|asap|high priority|very important|important|joruri|khub\s+kothin|onek\s+kothin|kothin|sohoj|shohoj)\b",
+                    r"(?:খুব\s*কঠিন|অনেক\s*কঠিন|কঠিন|সহজ|জরুরি|গুরুত্বপূর্ণ)",
+                    r"\b(joma\s+dite\s+hobe|joma\s+diote\s+hobe|joma\s+dao|joma\s+dewa|diote\s+hobe|dite\s+hobe|korte\s+hobe|ache|ase|acche|lagbe|somoy\s+lagbe)\b",
+                    r"(?:জমা\s*দিতে\s*হবে|দিতে\s*হবে|করতে\s*হবে|আছে|লাগবে|সময়\s*লাগবে|সময়\s*লাগবে)",
+                    r"\b(joma|modhe|moddhe|porjonto|nagad)\b",
+                    r"(?:জমা|মধ্যে|পর্যন্ত|নাগাদ)",
                     r"\bfor\s+(tonight|today|tomorrow)\b",
                     r"\bplease\b"):
         t = re.sub(pattern, " ", t, flags=re.IGNORECASE)
-    if due_matched:
-        t = re.sub(re.escape(due_matched), " ", t, flags=re.IGNORECASE)
-    if dur_matched:
-        t = re.sub(re.escape(dur_matched), " ", t, flags=re.IGNORECASE)
     # date/time words already matched are removed by resolve step below
-    t = re.sub(r"\b(tomorrow|tmr|tmrw|tonight|today|next week|this week)\b", " ", t, flags=re.IGNORECASE)
-    t = re.sub(r"\b(next|this)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b", " ", t, flags=re.IGNORECASE)
-    t = re.sub(r"\b\d{1,2}\s*(am|pm)\b", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(tomorrow|tommorow|tomorow|tommorrow|tmr|tmrw|tonight|today|todat|next week|this week|agamikal|agami\s+kal|kalker|kalke|kal|ajke|ajker|ajk|aj|porshu|poroshu)\b", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"(?:আগামীকাল|কালকের|কালকে|কাল|আজকে|আজকের|আজ|আগামী\s*পরশু|পরশু)", " ", t)
+    t = re.sub(r"\b(next|this|agami)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|shombar|sombar|mongolbar|budhbar|brihoshpotibar|shukrobar|shonibar|robibar)\b", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(rat|raat|raate|rate|sondha|shondha|sondhay|shondhay|bikal|bikale|dupur|dupure|shokal|sokal|shokale|sokale)\b", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"(?:রাতে|রাত|সন্ধ্যায়|সন্ধ্যায়|সন্ধ্যা|বিকেলে|বিকাল|দুপুরে|দুপুর|সকালে|সকাল)", " ", t)
+    t = re.sub(r"\b\d{1,2}\s*(am|pm|tar|tay|ta)\b", " ", t, flags=re.IGNORECASE)
     t = re.sub(r"\b\d{1,2}:\d{2}\b", " ", t)
-    t = re.sub(r"\b(on|by|due|at|for|until|till)\b\s*$", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(on|by|due|at|for|until|till|amar|ekta|ektu)\b\s*$", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(amar|ekta|ektu)\b", " ", t, flags=re.IGNORECASE)
+    # Fix common student spelling typos in task nouns
+    for bad, good in (("assignmant", "assignment"), ("asignmant", "assignment"),
+                      ("assigment", "assignment"), ("assinment", "assignment"),
+                      ("homewrok", "homework"), ("projct", "project"),
+                      ("presentaion", "presentation"), ("quize", "quiz")):
+        t = re.sub(rf"\b{bad}\b", good, t, flags=re.IGNORECASE)
     t = re.sub(r"\s+", " ", t).strip(" ,.:;-")
     return t
 
@@ -266,11 +303,11 @@ def parse_task_segment(segment, now=None, settings=None):
     t = ExtractedTask()
 
     due, due_matched = fdates.resolve_relative_date(text, now=now, settings=settings)
+    hhmm, t_matched = fdates.parse_time_of_day(text)
     if due:
         t.due_date = due
-        hhmm, t_matched = fdates.parse_time_of_day(text)
-        if hhmm:
-            t.due_time = hhmm
+    if hhmm:
+        t.due_time = hhmm
     minutes, dur_matched = extract_duration(text)
     if minutes:
         t.estimated_minutes = minutes
@@ -279,13 +316,16 @@ def parse_task_segment(segment, now=None, settings=None):
     t.difficulty = extract_difficulty(text)
     t.subject = clean_str(extract_subject_mention(text), 120)
 
-    title = clean_title(text, due_matched=None, dur_matched=dur_matched)
-    title = clean_title(title, due_matched=due_matched)
+    title = clean_title(text, due_matched=due_matched, dur_matched=dur_matched,
+                        time_matched=t_matched)
     title = re.sub(r"^(?:i\s+)?(?:really\s+)?(?:need|have)\s+to\s+", "", title,
                    flags=re.IGNORECASE)
     title = re.sub(r"^(?:please\s+)?(?:my|the|a|an)\s+", "", title, flags=re.IGNORECASE)
     if not title or len(title) < 2:
         title = clean_str(segment, 200) or "New Task"
+    # Capitalize first letter cleanly if lowercase
+    if title and title[0].islower():
+        title = title[0].upper() + title[1:]
     t.title = title[:200]
     t.confidence = 0.6
     t.source = "local"
@@ -398,8 +438,9 @@ Schema:
 }
 
 Rules:
+- The user may write in English, Bangla (বাংলা), or Banglish (Romanized Bengali, e.g. "kal amar AI assignment ache, 2 ghonta lagbe, kothin", "ajker plan koro"). Understand all three seamlessly.
 - Use null for anything unknown. NEVER invent dates, durations, or subjects.
-- Resolve relative dates against the CURRENT DATE given below.
+- Resolve relative dates against the CURRENT DATE given below (e.g., aj/ajke/আজ = today, kal/kalke/কাল = tomorrow, porshu/পরশু = day after tomorrow).
 - One entry per task; a request may contain several tasks.
 - blocks: when the user says a time is taken (class, busy, "don't schedule
   X to Y"), list it here with times resolved to 24h HH:MM. Recurring blocks
@@ -634,21 +675,67 @@ def extract(text, provider=None, now=None, settings=None, subject_names=None):
         det.warnings.append(f"LLM extraction unavailable ({e.__class__.__name__}); used local parser")
         return det
 
-    # Prefer the LLM result when it found tasks; keep deterministic titles when better
+    # Prefer the LLM result when it found tasks; keep deterministic titles/subjects when LLM hallucinates
     if llm_res.tasks or llm_res.intent not in ("unknown", "chat"):
+        text_low = (text or "").lower()
+        from focus_agent import subjects as fsubjects
         for dt, lt in zip(det.tasks, llm_res.tasks):
             if not lt.estimated_minutes and dt.estimated_minutes:
                 lt.estimated_minutes = dt.estimated_minutes
+            if not lt.due_time and dt.due_time:
+                lt.due_time = dt.due_time
+            if not lt.difficulty and dt.difficulty:
+                lt.difficulty = dt.difficulty
+            if not lt.importance and dt.importance:
+                lt.importance = dt.importance
             if not lt.due_date and dt.due_date:
                 lt.due_date = dt.due_date
             elif (lt.due_date and dt.due_date and lt.due_date != dt.due_date):
                 # The deterministic date came from an explicit keyword
-                # ("tonight", "next wednesday") - keyword evidence beats the
+                # ("tonight", "next wednesday", "kal") - keyword evidence beats the
                 # model's inference about relative dates.
                 llm_res.warnings.append(
                     f"date taken from local resolver ({dt.due_date}) "
                     f"over model's ({lt.due_date})")
                 lt.due_date = dt.due_date
+
+            # Guard against LLM hallucinating a known_subject not mentioned in text
+            if lt.subject:
+                subj_tokens = [w for w in re.split(r"\W+", lt.subject.lower()) if len(w) >= 2]
+                subj_in_text = any(w in text_low for w in subj_tokens)
+                if not subj_in_text and dt.subject:
+                    subj_in_text = fsubjects._are_aliases(
+                        fsubjects._normalize(lt.subject),
+                        fsubjects._normalize(dt.subject)
+                    )
+                if not subj_in_text:
+                    llm_res.warnings.append(
+                        f"dropped hallucinated LLM subject '{lt.subject}'; "
+                        f"used local '{dt.subject}'")
+                    lt.subject = dt.subject
+            elif dt.subject:
+                lt.subject = dt.subject
+
+            # Guard against LLM hallucinating a title from known_subjects not in text
+            if lt.title and dt.title and subject_names:
+                lt_low = lt.title.lower()
+                hallucinated_title = False
+                for ks in subject_names:
+                    ks_low = str(ks).lower()
+                    ks_words = [w for w in re.split(r"\W+", ks_low) if len(w) >= 3]
+                    if ks_low and len(ks_low) >= 3 and ks_low in lt_low and not any(w in text_low for w in ks_words):
+                        hallucinated_title = True
+                        break
+                if hallucinated_title:
+                    llm_res.warnings.append(
+                        f"title taken from local parser ('{dt.title}') "
+                        f"over hallucinated model title ('{lt.title}')")
+                    lt.title = dt.title
+
+        # If all tasks now have a resolved due_date, clear stale LLM due-date follow-up question
+        if llm_res.tasks and all(t.due_date for t in llm_res.tasks) and llm_res.question:
+            if re.search(r"\b(due|deadline|date|when)\b", llm_res.question.lower()):
+                llm_res.question = None
         # LLM intent unclear but the deterministic pass recognized the shape
         if llm_res.intent in ("unknown", None) and det.intent not in ("unknown", "chat"):
             llm_res.intent = det.intent

@@ -27,7 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
 
 # V2 agent layer (graceful: app opens even if the agent package fails to load)
 AGENT_AVAILABLE = True
@@ -42,9 +41,6 @@ try:
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
@@ -66,19 +62,32 @@ class ChatView(ctk.CTkFrame):
         self._busy = False
         self._confirm_answers = queue.Queue()
         self._status_checked = False
+        self._wrappable_labels = []
+        self._wrap_width = 520
         self.render()
 
     def render(self):
         for w in self.winfo_children(): w.destroy()
+        self._wrappable_labels = []
 
         # Header with provider status
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=20, pady=(10, 10))
-        ctk.CTkLabel(header, text="🤖 AI Assistant", font=FONTS["title"]).pack(side="left")
+        header.pack(fill="x", padx=16, pady=(6, 6))
+        title_col = ctk.CTkFrame(header, fg_color="transparent")
+        title_col.pack(side="left")
+        ctk.CTkLabel(title_col, text="🤖 Focus Agent V2 Console", font=FONTS["title"],
+                     text_color=COLORS["text"]).pack(anchor="w")
+        ctk.CTkLabel(title_col, text="Autonomous tool execution · verified writes · adaptive planning",
+                     font=FONTS["small"], text_color=COLORS["text_dim"]).pack(anchor="w")
 
-        self.status_lbl = ctk.CTkLabel(header, text="● checking…",
+        status_pill = ctk.CTkFrame(
+            header, fg_color=COLORS["card"], corner_radius=8,
+            border_width=1, border_color=COLORS["border"]
+        )
+        status_pill.pack(side="right", pady=4)
+        self.status_lbl = ctk.CTkLabel(status_pill, text="● checking provider…",
                                        font=FONTS["small"], text_color=COLORS["text_dim"])
-        self.status_lbl.pack(side="right")
+        self.status_lbl.pack(padx=10, pady=5)
         if not AGENT_AVAILABLE:
             self.status_lbl.configure(text="● agent layer unavailable", text_color=COLORS["error"])
 
@@ -86,25 +95,54 @@ class ChatView(ctk.CTkFrame):
         if not self._status_checked and AGENT_AVAILABLE:
             self._check_provider_status_async()
 
+        # Quick Prompt Chips (1-click Agent workflows from spec)
+        chips_bar = ctk.CTkFrame(self, fg_color="transparent")
+        chips_bar.pack(fill="x", padx=16, pady=(0, 6))
+        quick_prompts = [
+            ("🗓 Plan my day", "Plan my day"),
+            ("🎯 Prioritize tasks", "What should I prioritize?"),
+            ("📊 7-Day Analytics", "Analyze my productivity over the last seven days."),
+            ("🚀 Python Roadmap", "I want to learn Python in two months. Create a roadmap."),
+        ]
+        for label, prompt_txt in quick_prompts:
+            ctk.CTkButton(
+                chips_bar, text=label, height=28, corner_radius=8,
+                fg_color=COLORS["card"], hover_color=COLORS["card_highlight"],
+                border_width=1, border_color=COLORS["border"],
+                text_color=COLORS["accent"], font=FONTS["small"],
+                command=lambda p=prompt_txt: self._run_quick_prompt(p)
+            ).pack(side="left", padx=(0, 6))
+
         # Chat area
-        self.scroll = ctk.CTkScrollableFrame(self, fg_color=COLORS["sidebar"], corner_radius=15)
-        self.scroll.pack(fill="both", expand=True, padx=20, pady=10)
+        self.scroll = ctk.CTkScrollableFrame(
+            self, fg_color=COLORS["bg_secondary"], corner_radius=14,
+            border_width=1, border_color=COLORS["border"]
+        )
+        self.scroll.pack(fill="both", expand=True, padx=16, pady=6)
 
         # Input area
-        input_frame = ctk.CTkFrame(self, fg_color=COLORS["card"], height=60, corner_radius=20)
-        input_frame.pack(fill="x", padx=20, pady=(10, 20))
+        input_frame = ctk.CTkFrame(
+            self, fg_color=COLORS["card"], height=56, corner_radius=14,
+            border_width=1, border_color=COLORS["border"]
+        )
+        input_frame.pack(fill="x", padx=16, pady=(6, 12))
 
-        self.entry = ctk.CTkEntry(input_frame, placeholder_text="Try: 'Tomorrow submit my AI assignment; it will take about two hours'",
-                                  font=FONTS["body"], fg_color="transparent", border_width=0)
-        self.entry.pack(side="left", fill="both", expand=True, padx=(20, 10), pady=10)
+        self.entry = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Ask or instruct: e.g. 'I have a Data Communication assignment due next Thursday, 3 hours, hard'",
+            font=FONTS["body"], fg_color="transparent", border_width=0
+        )
+        self.entry.pack(side="left", fill="both", expand=True, padx=(16, 8), pady=8)
         self.entry.bind("<Return>", lambda e: self.send_message())
 
-        ctk.CTkButton(input_frame, text="📎", width=40, height=36, corner_radius=15,
-                      fg_color="transparent", text_color=COLORS["accent"],
-                      hover_color=COLORS["card_hover"], command=self.upload_image).pack(side="left", padx=5)
+        ctk.CTkButton(input_frame, text="📎 Routine Image", width=115, height=34, corner_radius=10,
+                      fg_color=COLORS["bg_secondary"], text_color=COLORS["accent"],
+                      hover_color=COLORS["card_hover"], font=FONTS["small"],
+                      command=self.upload_image).pack(side="left", padx=4)
 
-        self.send_btn = ctk.CTkButton(input_frame, text="Send 🚀", width=90, height=36, corner_radius=15,
-                                      fg_color=COLORS["accent"], command=self.send_message)
+        self.send_btn = ctk.CTkButton(input_frame, text="Send ✦", width=95, height=34, corner_radius=10,
+                                      fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
+                                      text_color="white", command=self.send_message)
         self.send_btn.pack(side="right", padx=10)
 
         if not self.history:
@@ -139,6 +177,13 @@ class ChatView(ctk.CTkFrame):
         threading.Thread(target=run, daemon=True).start()
 
     # ---------------- sending ----------------
+
+    def _run_quick_prompt(self, prompt_text):
+        if self._busy:
+            return
+        self.entry.delete(0, "end")
+        self.entry.insert(0, prompt_text)
+        self.send_message()
 
     def send_message(self):
         msg = self.entry.get().strip()
@@ -185,7 +230,9 @@ class ChatView(ctk.CTkFrame):
         if err:
             self.add_message("assistant", f"⚠️ {err}")
         else:
-            # honest execution trail first: only steps the loop really took
+            # 1. Agent Reasoning & Tool Trace Card ("Show Agent Thinking")
+            self._add_reasoning_trace(reply)
+            # 2. Honest execution trail
             for ev in (getattr(reply, "events", None) or []):
                 self._add_event_line(ev)
             self.add_message("assistant", reply.message)
@@ -195,6 +242,51 @@ class ChatView(ctk.CTkFrame):
                 self._add_plan_chip(reply.plan)
             self._refresh_after_action(reply)
         self._set_busy(False)
+
+    def _add_reasoning_trace(self, reply):
+        """Render a structured 'Agent Thinking & Trace' card for transparency."""
+        ext = getattr(reply, "extraction", None)
+        tools = getattr(reply, "tool_results", None) or []
+        if not ext and not tools:
+            return
+        trace_card = ctk.CTkFrame(
+            self.scroll, fg_color=COLORS["card_highlight"], corner_radius=10,
+            border_width=1, border_color=COLORS["accent_light"]
+        )
+        trace_card.pack(fill="x", padx=10, pady=(4, 2), anchor="w")
+
+        parts = []
+        if ext:
+            src = "LLM + Validator" if ext.source == "llm" else "Deterministic Engine"
+            parts.append(f"🔍 Intent: {ext.intent} ({src})")
+            if ext.tasks:
+                t0 = ext.tasks[0]
+                t_bits = []
+                if t0.title:
+                    t_bits.append(f"title='{t0.title}'")
+                if t0.subject:
+                    t_bits.append(f"subject='{t0.subject}'")
+                if t0.due_date:
+                    t_bits.append(f"due={t0.due_date}")
+                if t0.due_time:
+                    t_bits.append(f"time={t0.due_time}")
+                if t0.estimated_minutes:
+                    t_bits.append(f"est={t0.estimated_minutes}m")
+                if t0.difficulty:
+                    t_bits.append(f"diff={t0.difficulty}/3")
+                if t_bits:
+                    parts.append("Extracted: " + ", ".join(t_bits))
+        if tools:
+            tool_names = ", ".join(f"{tr.tool}({'✓' if tr.ok else '✗'})" for tr in tools)
+            parts.append(f"Tools: {tool_names}")
+
+        trace_txt = "  ·  ".join(parts)
+        lbl = ctk.CTkLabel(
+            trace_card, text=trace_txt, font=FONTS["tiny"],
+            text_color=COLORS["accent"], wraplength=self._wrap_width, justify="left"
+        )
+        lbl.pack(padx=12, pady=6, anchor="w")
+        self._wrappable_labels.append(lbl)
 
     def _add_event_line(self, ev):
         """One loop step, rendered as a subtle status line. Only real events
@@ -215,9 +307,11 @@ class ChatView(ctk.CTkFrame):
         text = (ev.get("text") or "")[:240]
         chip = ctk.CTkFrame(self.scroll, fg_color="transparent")
         chip.pack(fill="x", padx=10, pady=0, anchor="w")
-        ctk.CTkLabel(chip, text=f"{icon} {text}", font=FONTS["small"],
-                     text_color=color, wraplength=480,
-                     justify="left").pack(padx=12, pady=1, anchor="w")
+        lbl = ctk.CTkLabel(chip, text=f"{icon} {text}", font=FONTS["small"],
+                           text_color=color, wraplength=self._wrap_width,
+                           justify="left")
+        lbl.pack(padx=12, pady=1, anchor="w")
+        self._wrappable_labels.append(lbl)
         try:
             self.scroll._parent_canvas.yview_moveto(1.0)
         except Exception:
@@ -238,12 +332,17 @@ class ChatView(ctk.CTkFrame):
         bg_col = COLORS["accent"] if role == "user" else COLORS["card"]
         text_col = "white" if role == "user" else COLORS["text"]
 
-        bubble = ctk.CTkFrame(bubble_frame, fg_color=bg_col, corner_radius=15)
+        bubble = ctk.CTkFrame(
+            bubble_frame, fg_color=bg_col, corner_radius=14,
+            border_width=0 if role == "user" else 1,
+            border_color=COLORS["border"]
+        )
         bubble.pack(side=align, padx=10, pady=2, anchor="e" if role == "user" else "w")
 
         msg_lbl = ctk.CTkLabel(bubble, text=content, font=FONTS["body"], text_color=text_col,
-                               wraplength=520, justify="left")
+                               wraplength=self._wrap_width, justify="left")
         msg_lbl.pack(padx=15, pady=8)
+        self._wrappable_labels.append(msg_lbl)
 
         if not is_temporary and not render_only:
             self.history.append({"role": role, "content": content})
@@ -261,13 +360,27 @@ class ChatView(ctk.CTkFrame):
         text = (tr.message or tr.error or "")[:220]
         chip = ctk.CTkFrame(self.scroll, fg_color=COLORS["card_hover"], corner_radius=10)
         chip.pack(fill="x", padx=10, pady=1, anchor="w")
-        ctk.CTkLabel(chip, text=f"{icon} {tr.tool}: {text}", font=FONTS["small"],
-                     text_color=COLORS["success_dark"] if ok else COLORS["error"],
-                     wraplength=480, justify="left").pack(padx=12, pady=4, anchor="w")
+        lbl = ctk.CTkLabel(chip, text=f"{icon} {tr.tool}: {text}", font=FONTS["small"],
+                           text_color=COLORS["success_dark"] if ok else COLORS["error"],
+                           wraplength=self._wrap_width, justify="left")
+        lbl.pack(padx=12, pady=4, anchor="w")
+        self._wrappable_labels.append(lbl)
         try:
             self.scroll._parent_canvas.yview_moveto(1.0)
         except Exception:
             pass
+
+    def on_resize(self, width, height):
+        self._wrap_width = max(240, int((width - 80) * 0.78))
+        alive = []
+        for lbl in self._wrappable_labels:
+            try:
+                if lbl.winfo_exists():
+                    lbl.configure(wraplength=self._wrap_width)
+                    alive.append(lbl)
+            except Exception:
+                pass
+        self._wrappable_labels = alive
 
     def _add_plan_chip(self, plan):
         """Compact schedule preview chip with a button to open the Planner.
@@ -325,7 +438,7 @@ class ChatView(ctk.CTkFrame):
         if file_path:
             self.add_message("user", f"Uploaded image: {os.path.basename(file_path)}")
 
-            from ai_parser import parse_file_with_ai
+            from focus_agent.media_import import parse_file_with_ai
 
             thinking_lbl = self.add_message("assistant", "Analyzing image… 🖼️", is_temporary=True)
             self.update()
@@ -336,8 +449,13 @@ class ChatView(ctk.CTkFrame):
             if result:
                 msg = result.get("message", "I've analyzed the image.")
                 if result.get("intent") == "schedule_file":
-                    msg = f"✅ I found {len(result.get('classes', []))} classes in that image! Review them in the Routine tab."
-                    self.app.views["routine"].render()
+                    classes = result.get("classes", [])
+                    if classes:
+                        from logic import save_routine_from_parser
+                        save_routine_from_parser(self.app.data, classes)
+                    msg = f"✅ I found {len(classes)} classes in that image! Review them in the Routine tab."
+                    if "routine" in self.app.views:
+                        self.app.views["routine"].render()
 
                 self.add_message("assistant", msg)
             else:

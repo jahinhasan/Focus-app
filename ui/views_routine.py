@@ -27,11 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
 from .widgets import TimePicker, DaySelector, Tooltip
@@ -67,25 +62,35 @@ class RoutineView(ctk.CTkFrame):
                       corner_radius=8, command=self.prompt_add_class).pack(side="right")
 
         grid = ctk.CTkFrame(self, fg_color="transparent")
-        grid.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        grid.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        grid.grid_rowconfigure(1, weight=1)
 
         days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        today_day = datetime.now().strftime("%a").lower()[:3]
+        weekly = get_weekly_class_tasks(self.app.data)
         for i, d in enumerate(days):
             grid.grid_columnconfigure(i, weight=1, uniform="days")
+            is_today = (d == today_day)
+            hdr_bg = COLORS["accent"] if is_today else COLORS["card"]
+            hdr_fg = "white" if is_today else COLORS["text"]
 
-            day_header = ctk.CTkFrame(grid, fg_color=COLORS["card"], height=35)
-            day_header.grid(row=0, column=i, sticky="ew", padx=2, pady=2)
+            day_header = ctk.CTkFrame(
+                grid, fg_color=hdr_bg, height=34, corner_radius=8,
+                border_width=0 if is_today else 1, border_color=COLORS["border"]
+            )
+            day_header.grid(row=0, column=i, sticky="ew", padx=3, pady=2)
             day_header.grid_propagate(False)
-            ctk.CTkLabel(day_header, text=d.upper(), font=FONTS["small"]).pack(expand=True)
+            hdr_txt = f"{d.upper()} •" if is_today else d.upper()
+            ctk.CTkLabel(day_header, text=hdr_txt, font=FONTS["small"], text_color=hdr_fg).pack(expand=True)
 
-            # Fixed height day content to prevent resizing
-            day_content = ctk.CTkScrollableFrame(grid, fg_color=COLORS["sidebar"], 
-                                                  height=350, scrollbar_button_color=COLORS["card"])
-            day_content.grid(row=1, column=i, sticky="nsew", padx=2, pady=2)
+            day_content = ctk.CTkScrollableFrame(
+                grid, fg_color=COLORS["bg_secondary"], corner_radius=8,
+                border_width=1, border_color=COLORS["accent_light"] if is_today else COLORS["border"],
+                scrollbar_button_color=COLORS["border"]
+            )
+            day_content.grid(row=1, column=i, sticky="nsew", padx=3, pady=2)
             self.day_containers[d] = day_content  # Store for silent add
-            grid.grid_rowconfigure(1, weight=1, minsize=350)
 
-            weekly = get_weekly_class_tasks(self.app.data)
             classes = weekly.get(d, [])
             classes.sort(key=lambda x: x.get("schedule", {}).get("start", ""))
 
@@ -95,8 +100,8 @@ class RoutineView(ctk.CTkFrame):
     def _draw_class_card(self, parent, c):
         """Draw a single class card and register it."""
         sch = c.get("schedule", {})
-        cls_card = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=5)
-        cls_card.pack(fill="x", pady=2, padx=2)
+        cls_card = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=6)
+        cls_card.pack(fill="x", pady=3, padx=2)
         
         # simple store for callback
         cls_card._class_id = c["id"]
@@ -107,13 +112,14 @@ class RoutineView(ctk.CTkFrame):
         self.class_cards[c["id"]].append(cls_card)
         
         # Class info
-        time_lbl = ctk.CTkLabel(cls_card, text=f"{sch.get('start','')}", 
+        time_lbl = ctk.CTkLabel(cls_card, text=f"{sch.get('start','')}–{sch.get('end','')}", 
                         font=FONTS["tiny"], text_color=COLORS["warning"])
-        time_lbl.pack(pady=(4,0))
+        time_lbl.pack(pady=(4, 0), padx=2)
         
-        title_lbl = ctk.CTkLabel(cls_card, text=f"{c['title'][:10]}", 
-                        font=FONTS["small"], text_color=COLORS["accent"])
-        title_lbl.pack()
+        title_lbl = ctk.CTkLabel(cls_card, text=c["title"], 
+                        font=FONTS["small"], text_color=COLORS["accent"],
+                        wraplength=95, justify="center")
+        title_lbl.pack(padx=3, pady=1)
         
         # Store label references for silent update
         cls_card._time_lbl = time_lbl
@@ -190,12 +196,19 @@ class RoutineView(ctk.CTkFrame):
             else:
                 if class_id in self.class_cards:
                     for card in self.class_cards[class_id]:
-                        if hasattr(card, "_title_lbl"): card._title_lbl.configure(text=new_title[:10])
-                        if hasattr(card, "_time_lbl"): card._time_lbl.configure(text=new_start)
+                        if hasattr(card, "_title_lbl"): card._title_lbl.configure(text=new_title)
+                        if hasattr(card, "_time_lbl"): card._time_lbl.configure(text=f"{new_start}–{new_end}")
             
             top.destroy()
         
         ctk.CTkButton(top, text="Save Changes", fg_color=COLORS["success"], command=save, height=40).pack(pady=20)
+
+    def on_resize(self, width, height):
+        col_wrap = max(65, int((width - 60) / 7) - 18)
+        for cards in self.class_cards.values():
+            for card in cards:
+                if hasattr(card, "_title_lbl") and card._title_lbl:
+                    card._title_lbl.configure(wraplength=col_wrap)
     
     def delete_class_silent(self, class_id):
         """Delete a class silently without full refresh (removes all cards)."""
@@ -287,7 +300,7 @@ class RoutineView(ctk.CTkFrame):
             except: pass
 
             try:
-                from ai_parser import parse_file_with_ai
+                from focus_agent.media_import import parse_file_with_ai
                 result = parse_file_with_ai(file_path)
                 
                 if result.get("intent") == "schedule_file" and "classes" in result:
@@ -324,44 +337,18 @@ class RoutineView(ctk.CTkFrame):
         ModernFileSelector(self.winfo_toplevel(), on_file_picked)
 
     def parse_schedule_ai(self, text):
-        """Parse schedule using AI - format free!"""
-        from ai_parser import SmartParser
-        import re
-        
-        parser = SmartParser()
+        """Parse schedule using V2 routine parser."""
+        from focus_agent.media_import import parse_routine_text
+        classes = parse_routine_text(text)
         count = 0
-        
-        # Day mapping for normalization
-        day_map = {"sunday": "sun", "monday": "mon", "tuesday": "tue", 
-                   "wednesday": "wed", "thursday": "thu", "friday": "fri", "saturday": "sat"}
-        
-        lines = text.strip().split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            if not line or len(line) < 5: continue
-            
-            # Use SmartParser for robust detection (Regex + AI)
-            result = parser.parse(line)
-            
-            if result and result.get("intent") == "class" and not result.get("needs_clarification"):
-                self._add_or_update_class(
-                    result.get("title", "Class"),
-                    result.get("days", []),
-                    result.get("start", "09:00"),
-                    result.get("end", "10:30")
-                )
-                count += 1
-            elif result and result.get("intent") == "schedule_file" and "classes" in result:
-                for c in result["classes"]:
-                    self._add_or_update_class(
-                        c.get("title", "Class"),
-                        c.get("days", []),
-                        c.get("start", "09:00"),
-                        c.get("end", "10:30")
-                    )
-                    count += 1
-        
+        for c in classes:
+            self._add_or_update_class(
+                c.get("title", "Class"),
+                c.get("days", []),
+                c.get("start", "09:00"),
+                c.get("end", "10:30")
+            )
+            count += 1
         return count
     
     def _add_or_update_class(self, title, days, start, end):

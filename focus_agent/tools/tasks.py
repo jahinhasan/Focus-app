@@ -132,12 +132,15 @@ def tool_create_task(data, args, ctx):
         add_subtask(data, task["id"], st)
 
     due_txt = f", due {args.get('due_date')}" if args.get("due_date") else " (no deadline)"
+    if args.get("due_time"):
+        due_txt += f" at {args['due_time']}"
     dur_txt = f", ~{args['duration_minutes']}min" if args.get("duration_minutes") else ""
     msg = f"Created task '{title}'{due_txt}{dur_txt}"
     if subject_assigned:
         msg += f" [subject: {subject_assigned}]"
     payload = {"task_id": task["id"], "title": title,
-               "subject": subject_assigned, "due_date": args.get("due_date")}
+               "subject": subject_assigned, "due_date": args.get("due_date"),
+               "due_time": args.get("due_time")}
     if subject_note:
         payload["subject_note"] = subject_note
         msg += ". " + subject_note

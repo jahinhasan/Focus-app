@@ -27,7 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
 
 # V2 agent layer (graceful: app opens even if the agent package fails to load)
 AGENT_AVAILABLE = True
@@ -42,9 +41,6 @@ try:
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
@@ -163,17 +159,34 @@ class PlannerView(ctk.CTkFrame):
         ctk.CTkButton(head, text="✅ Apply to Tasks", width=140, fg_color=COLORS["success"],
                       hover_color=COLORS["success_dark"], command=apply_plan).pack(side="right")
 
+        self._wrappable = []
         for s in plan.slots:
-            row = ctk.CTkFrame(card, fg_color=COLORS["bg_secondary"], corner_radius=8)
-            row.pack(fill="x", padx=12, pady=3)
-            mark = "✅" if s.fixed else "▸"
-            ctk.CTkLabel(row, text=f"{mark} {s.start}–{s.end}", font=FONTS["body"],
-                         width=110, text_color=COLORS["accent"]).pack(side="left", padx=10, pady=6)
+            row = ctk.CTkFrame(
+                card, fg_color=COLORS["bg_secondary"], corner_radius=8,
+                border_width=1, border_color=COLORS["border"]
+            )
+            row.pack(fill="x", padx=12, pady=4)
+            mark = "📘" if s.fixed else "🎯"
+            ctk.CTkLabel(row, text=f"{mark} {s.start}–{s.end}", font=FONTS["subheader"],
+                         width=115, text_color=COLORS["accent"]).pack(side="left", padx=10, pady=8)
+
+            if not s.fixed and hasattr(self.app, "start_focus_for_task"):
+                # Calculate slot duration in minutes
+                dur_m = getattr(s, "minutes", None) or 25
+                ctk.CTkButton(
+                    row, text="▶ Start Focus", width=105, height=28,
+                    fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
+                    text_color="white", corner_radius=6, font=FONTS["small"],
+                    command=lambda t=s.title, d=dur_m: self.app.start_focus_for_task(t, d)
+                ).pack(side="right", padx=10, pady=6)
+
             title = s.title + (f"  (part {s.chunk}/{s.chunks})" if s.chunks > 1 else "")
-            ctk.CTkLabel(row, text=title, font=FONTS["body"]).pack(side="left", padx=4)
-            ctk.CTkLabel(row, text=s.reason, font=FONTS["tiny"],
-                         text_color=COLORS["text_dim"], wraplength=330,
-                         justify="left").pack(side="right", padx=10, pady=4)
+            ctk.CTkLabel(row, text=title, font=FONTS["subheader"], text_color=COLORS["text"]).pack(side="left", padx=4)
+            rlbl = ctk.CTkLabel(row, text=s.reason, font=FONTS["tiny"],
+                                text_color=COLORS["text_dim"], wraplength=280,
+                                justify="left")
+            rlbl.pack(side="right", padx=10, pady=4)
+            self._wrappable.append(rlbl)
 
         # Unscheduled
         for u in plan.unscheduled:
@@ -181,14 +194,18 @@ class PlannerView(ctk.CTkFrame):
             row.pack(fill="x", padx=12, pady=3)
             ctk.CTkLabel(row, text=f"⚠ {u['title']}", font=FONTS["small"],
                          text_color="#1a1a1a").pack(anchor="w", padx=10, pady=(4, 0))
-            ctk.CTkLabel(row, text=u["reason"], font=FONTS["tiny"],
-                         text_color="#1a1a1a", wraplength=560,
-                         justify="left").pack(anchor="w", padx=10, pady=(0, 4))
+            ulbl = ctk.CTkLabel(row, text=u["reason"], font=FONTS["tiny"],
+                                text_color="#1a1a1a", wraplength=560,
+                                justify="left")
+            ulbl.pack(anchor="w", padx=10, pady=(0, 4))
+            self._wrappable.append(ulbl)
 
         for note in plan.notes:
-            ctk.CTkLabel(card, text=note, font=FONTS["small"],
-                         text_color=COLORS["text_dim"], wraplength=560,
-                         justify="left").pack(anchor="w", padx=15, pady=2)
+            nlbl = ctk.CTkLabel(card, text=note, font=FONTS["small"],
+                                text_color=COLORS["text_dim"], wraplength=560,
+                                justify="left")
+            nlbl.pack(anchor="w", padx=15, pady=2)
+            self._wrappable.append(nlbl)
 
         # Priority explanation card
         if priorities:
@@ -197,9 +214,20 @@ class PlannerView(ctk.CTkFrame):
             ctk.CTkLabel(pcard, text="Why this order?", font=FONTS["header"]).pack(anchor="w", padx=15, pady=(12, 4))
             for item in priorities[:8]:
                 due = f" (due {item['due_date']})" if item.get("due_date") else ""
-                ctk.CTkLabel(pcard, text=f"{item['rank']}. {item['title']}{due} — {item['reason']}",
-                             font=FONTS["small"], text_color=COLORS["text"], wraplength=560,
-                             justify="left").pack(anchor="w", padx=15, pady=2)
+                plbl = ctk.CTkLabel(pcard, text=f"{item['rank']}. {item['title']}{due} — {item['reason']}",
+                                    font=FONTS["small"], text_color=COLORS["text"], wraplength=560,
+                                    justify="left")
+                plbl.pack(anchor="w", padx=15, pady=2)
+                self._wrappable.append(plbl)
+
+    def on_resize(self, width, height):
+        w_full = max(260, int(width - 90))
+        for lbl in getattr(self, "_wrappable", []):
+            try:
+                if lbl.winfo_exists():
+                    lbl.configure(wraplength=w_full)
+            except Exception:
+                pass
 
 
 # ==================== GOALS VIEW ====================

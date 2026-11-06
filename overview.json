@@ -1,0 +1,865 @@
+{
+  "rootFolder": "/home/jahinpc/Documents/ai project/focus-app",
+  "analyzedAt": "2026-11-05T16:07:14.075Z",
+  "rootStructure": [
+    {
+      "name": ".github",
+      "type": "dir"
+    },
+    {
+      "name": ".gitignore",
+      "type": "file",
+      "size": 550,
+      "lines": 53
+    },
+    {
+      "name": "FocusApp.spec",
+      "type": "file",
+      "size": 770,
+      "lines": 42
+    },
+    {
+      "name": "LICENSE",
+      "type": "file",
+      "size": 1068,
+      "lines": 22
+    },
+    {
+      "name": "README.md",
+      "type": "file",
+      "size": 7533,
+      "lines": 145
+    },
+    {
+      "name": "__pycache__",
+      "type": "dir"
+    },
+    {
+      "name": "ace_integration.py",
+      "type": "file",
+      "size": 6321,
+      "lines": 192
+    },
+    {
+      "name": "ai_parser.py",
+      "type": "file",
+      "size": 39319,
+      "lines": 943
+    },
+    {
+      "name": "android",
+      "type": "dir"
+    },
+    {
+      "name": "data.json",
+      "type": "file",
+      "size": 12710,
+      "lines": 374
+    },
+    {
+      "name": "docs",
+      "type": "dir"
+    },
+    {
+      "name": "evaluate.py",
+      "type": "file",
+      "size": 20932,
+      "lines": 474
+    },
+    {
+      "name": "file_parser.py",
+      "type": "file",
+      "size": 2542,
+      "lines": 84
+    },
+    {
+      "name": "focus_agent",
+      "type": "dir"
+    },
+    {
+      "name": "logic.py",
+      "type": "file",
+      "size": 36483,
+      "lines": 1101
+    },
+    {
+      "name": "main.py",
+      "type": "file",
+      "size": 141,
+      "lines": 8
+    },
+    {
+      "name": "requirements.txt",
+      "type": "file",
+      "size": 780,
+      "lines": 23
+    },
+    {
+      "name": "setup.bat",
+      "type": "file",
+      "size": 1784,
+      "lines": 58
+    },
+    {
+      "name": "setup.sh",
+      "type": "file",
+      "size": 2366,
+      "lines": 62
+    },
+    {
+      "name": "storage.py",
+      "type": "file",
+      "size": 6562,
+      "lines": 167
+    },
+    {
+      "name": "tests",
+      "type": "dir"
+    },
+    {
+      "name": "ui",
+      "type": "dir"
+    },
+    {
+      "name": "utils.py",
+      "type": "file",
+      "size": 230,
+      "lines": 15
+    },
+    {
+      "name": "venv",
+      "type": "dir"
+    }
+  ],
+  "rootFileSnippets": {
+    "FocusApp.spec": [
+      "# -*- mode: python ; coding: utf-8 -*-",
+      "import os",
+      "import customtkinter",
+      "",
+      "ctk_path = os.path.dirname(customtkinter.__file__)",
+      "",
+      "a = Analysis(",
+      "['main.py'],",
+      "pathex=[],",
+      "binaries=[],"
+    ],
+    "LICENSE": [
+      "MIT License",
+      "",
+      "Copyright (c) 2026 Jahin Hasan",
+      "",
+      "Permission is hereby granted, free of charge, to any person obtaining a copy",
+      "of this software and associated documentation files (the \"Software\"), to deal",
+      "in the Software without restriction, including without limitation the rights",
+      "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+      "copies of the Software, and to permit persons to whom the Software is",
+      "furnished to do so, subject to the following conditions:"
+    ],
+    "README.md": [
+      "# 🎯 Focus Agent V2 — Agent-Based Student Productivity System",
+      "",
+      "[![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)",
+      "[![Ollama](https://img.shields.io/badge/LLM-Ollama_(local)-654FF0)](https://ollama.com)",
+      "[![Tests](https://img.shields.io/badge/tests-199_passing-brightgreen)](#-evaluation-measured-not-claimed)",
+      "[![Benchmark](https://img.shields.io/badge/benchmark-49%2F49_det_·_59%2F59_live-success)](docs/EVALUATION.md)",
+      "",
+      "A personal academic productivity **agent** — not a chatbot bolted onto a to-do",
+      "list. You talk to it in plain English; an agent loop decides steps, executes",
+      "**validated tools**, verifies its own writes, learns your real working pace"
+    ],
+    "ace_integration.py": [
+      "# ==================== ACE_INTEGRATION.PY ====================",
+      "# Optional self-learning layer for Focus Dashboard",
+      "# Provides a persistent \"skillbook\" and lightweight learning hooks.",
+      "# Designed to work even if external ACE framework is not installed.",
+      "",
+      "import os",
+      "import json",
+      "import time",
+      "from typing import Any, Dict, List",
+      ""
+    ],
+    "ai_parser.py": [
+      "# ==================== AI_PARSER.PY ====================",
+      "# AI-powered parsing for Focus Dashboard",
+      "# Handles natural language understanding for tasks, classes, and file parsing",
+      "",
+      "import os",
+      "import json",
+      "import re",
+      "from datetime import datetime",
+      "from file_parser import FileParser",
+      "from datetime import datetime, timedelta"
+    ],
+    "data.json": [
+      "{",
+      "\"level\": 1,",
+      "\"xp\": 5,",
+      "\"tasks\": [",
+      "{",
+      "\"id\": \"f33e018f-18b1-4349-a211-2e492d613840\",",
+      "\"type\": \"class\",",
+      "\"title\": \"CSE 3202\",",
+      "\"subject\": \"Database Systems\",",
+      "\"schedule\": {"
+    ],
+    "evaluate.py": [
+      "#!/usr/bin/env python3",
+      "\"\"\"Reproducible evaluation for the Focus To-Do Agent (spec O).",
+      "",
+      "Measures - on fixed benchmarks, no fabricated numbers:",
+      "1. NL task extraction accuracy (deterministic parser, and live LLM with --live)",
+      "2. Subject assignment accuracy (incl. refusal to guess)",
+      "3. Schedule feasibility (no overlaps, classes respected, no past slots,",
+      "every task accounted for)",
+      "4. Deadline handling (asks instead of guessing on deadline-sensitive tasks)",
+      "5. Tool-action success on a scripted scenario (validation, permissions,"
+    ],
+    "file_parser.py": [
+      "import os",
+      "import mimetypes",
+      "",
+      "try:",
+      "import pypdf",
+      "except ImportError:",
+      "pypdf = None",
+      "",
+      "try:",
+      "import docx"
+    ],
+    "logic.py": [
+      "# ==================== LOGIC.PY ====================",
+      "# Core business logic for Focus Dashboard",
+      "# Handles tasks, classes, XP, history, and routine management",
+      "",
+      "import json",
+      "import os",
+      "import uuid",
+      "import math",
+      "from datetime import date, datetime, timedelta",
+      "from utils import today"
+    ],
+    "main.py": [
+      "from ui import run_app",
+      "from dotenv import load_dotenv",
+      "",
+      "if __name__ == \"__main__\":",
+      "load_dotenv() # Load API keys from .env",
+      "run_app()",
+      "",
+      ""
+    ],
+    "requirements.txt": [
+      "# Focus Agent V2 (desktop) - core runtime",
+      "customtkinter>=5.2.2",
+      "pillow>=10.2.0          # >=11 needed on Python 3.13+ (10.2.0 does not build there)",
+      "tkcalendar>=1.6.1",
+      "darkdetect>=0.8.0",
+      "requests>=2.31.0        # LLM provider HTTP (Ollama / online adapter)",
+      "pydantic>=2.5           # domain models (models.py) + repository validation",
+      "pypdf>=3.17.4",
+      "python-docx>=1.1.0",
+      "pytesseract>=0.3.10"
+    ],
+    "setup.bat": [
+      "@echo off",
+      "REM ============================================================",
+      "REM Focus V2 - one-command setup for Windows",
+      "REM Usage: double-click this file, or run:  setup.bat",
+      "REM Creates a virtual environment, installs everything, and",
+      "REM launches the app. Safe to re-run any time.",
+      "REM ============================================================",
+      "cd /d \"%~dp0\"",
+      "",
+      "echo ==^> [1/5] Checking Python 3.10+ ..."
+    ],
+    "setup.sh": [
+      "#!/usr/bin/env bash",
+      "# ============================================================",
+      "# Focus V2 - one-command setup for Linux / macOS",
+      "# Usage:   bash setup.sh        (or: ./setup.sh)",
+      "# Creates a virtual environment, installs everything, and",
+      "# launches the app. Safe to re-run any time.",
+      "# ============================================================",
+      "set -e",
+      "cd \"$(dirname \"$0\")\"",
+      ""
+    ],
+    "storage.py": [
+      "# ==================== STORAGE.PY ====================",
+      "# Schema versioning + backward-compatible migration for data.json.",
+      "#",
+      "# Rules:",
+      "# - Migration is ADDITIVE ONLY. Existing keys, tasks, and history are never",
+      "#   removed, reset, or rewritten.",
+      "# - A timestamped backup of data.json is created BEFORE the first migration",
+      "#   save (rollback = restore the backup file).",
+      "# - Corrupt/missing data degrades safely instead of raising.",
+      ""
+    ],
+    "utils.py": [
+      "from datetime import date",
+      "",
+      "LEVEL_XP = 100",
+      "TARGET_DAYS = 7",
+      "",
+      "",
+      "def today():",
+      "return date.today().isoformat()",
+      "",
+      ""
+    ]
+  },
+  "importantFolders": [
+    {
+      "path": "android/android/app",
+      "category": "frontend",
+      "fileCount": 14,
+      "primaryLanguage": "Kotlin Script"
+    },
+    {
+      "path": "android/android/app/src/main/kotlin/com/example",
+      "category": "examples",
+      "fileCount": 1,
+      "primaryLanguage": "Kotlin"
+    },
+    {
+      "path": "android/android/app/src/main/kotlin/com/example/focus_app",
+      "category": "frontend",
+      "fileCount": 1,
+      "primaryLanguage": "Kotlin"
+    },
+    {
+      "path": "android/android/gradle/wrapper",
+      "category": "frontend",
+      "fileCount": 1
+    },
+    {
+      "path": "android/ios/Runner/Assets.xcassets",
+      "category": "assets",
+      "fileCount": 21
+    },
+    {
+      "path": "android/ios/Runner/Assets.xcassets/AppIcon.appiconset",
+      "category": "frontend",
+      "fileCount": 16
+    },
+    {
+      "path": "android/ios/Runner/Assets.xcassets/LaunchImage.imageset",
+      "category": "assets",
+      "fileCount": 5
+    },
+    {
+      "path": "android/ios/RunnerTests",
+      "category": "tests",
+      "fileCount": 1,
+      "primaryLanguage": "Swift"
+    },
+    {
+      "path": "android/lib",
+      "category": "core",
+      "fileCount": 11,
+      "primaryLanguage": "Dart"
+    },
+    {
+      "path": "android/macos/Runner/Assets.xcassets",
+      "category": "assets",
+      "fileCount": 8
+    },
+    {
+      "path": "android/macos/Runner/Assets.xcassets/AppIcon.appiconset",
+      "category": "frontend",
+      "fileCount": 8
+    },
+    {
+      "path": "android/macos/Runner/Configs",
+      "category": "config",
+      "fileCount": 4
+    },
+    {
+      "path": "android/macos/RunnerTests",
+      "category": "tests",
+      "fileCount": 1,
+      "primaryLanguage": "Swift"
+    },
+    {
+      "path": "android/test",
+      "category": "tests",
+      "fileCount": 3,
+      "primaryLanguage": "Dart"
+    },
+    {
+      "path": "android/web",
+      "category": "frontend",
+      "fileCount": 7
+    },
+    {
+      "path": "docs",
+      "category": "docs",
+      "fileCount": 7,
+      "primaryLanguage": "Python"
+    },
+    {
+      "path": "focus_agent/tools",
+      "category": "scripts",
+      "fileCount": 7,
+      "primaryLanguage": "Python"
+    },
+    {
+      "path": "tests",
+      "category": "tests",
+      "fileCount": 21,
+      "primaryLanguage": "Python"
+    },
+    {
+      "path": "ui",
+      "category": "frontend",
+      "fileCount": 14,
+      "primaryLanguage": "Python"
+    }
+  ],
+  "readmeParagraphs": {
+    "android/ios/Runner/Assets.xcassets/LaunchImage.imageset": "# Launch Screen Assets",
+    "android": "# 📱 Focus Dashboard: Android Edition",
+    "root": "# 🎯 Focus Agent V2 — Agent-Based Student Productivity System"
+  },
+  "totals": {
+    "numFiles": 228,
+    "numDirs": 82,
+    "totalSizeBytes": 1410445,
+    "totalLinesOfCode": 21232
+  },
+  "fileCategories": {
+    "other": 80,
+    "config": 21,
+    "test": 1,
+    "documentation": 15,
+    "source": 110,
+    "build": 1
+  },
+  "linesOfCodePerLanguage": {
+    "Python": 16678,
+    "Kotlin Script": 99,
+    "Kotlin": 6,
+    "Swift": 91,
+    "C/C++": 230,
+    "Dart": 3347,
+    "C++": 661,
+    "Batch": 58,
+    "Shell": 62
+  },
+  "filesPerLanguage": {
+    "Python": 68,
+    "Kotlin Script": 3,
+    "Kotlin": 1,
+    "Swift": 6,
+    "C/C++": 8,
+    "Dart": 14,
+    "C++": 8,
+    "Batch": 1,
+    "Shell": 1
+  },
+  "projectTypes": [
+    "C/C++ (CMake)",
+    "Dart (Pub)",
+    "Python (requirements)"
+  ],
+  "frameworks": [
+    "Django",
+    "Flask"
+  ],
+  "entryPoints": [
+    "docs/make_banglish_guide.py",
+    "evaluate.py",
+    "main.py",
+    "setup.sh"
+  ],
+  "ciCdTools": [
+    "GitHub Actions"
+  ],
+  "packageManagers": [
+    "pip"
+  ],
+  "topLevelDirectories": [
+    {
+      "name": "focus_agent",
+      "numFiles": 25,
+      "totalLoc": 6546,
+      "dominantLanguage": "Python"
+    },
+    {
+      "name": "android",
+      "numFiles": 143,
+      "totalLoc": 4434,
+      "dominantLanguage": "Dart"
+    },
+    {
+      "name": "ui",
+      "numFiles": 14,
+      "totalLoc": 4122,
+      "dominantLanguage": "Python"
+    },
+    {
+      "name": "tests",
+      "numFiles": 21,
+      "totalLoc": 2545,
+      "dominantLanguage": "Python"
+    },
+    {
+      "name": "docs",
+      "numFiles": 7,
+      "totalLoc": 481,
+      "dominantLanguage": "Python"
+    }
+  ],
+  "detailedDirectories": [
+    {
+      "path": "focus_agent",
+      "name": "focus_agent",
+      "level": 1,
+      "numFiles": 25,
+      "totalLoc": 6546,
+      "dominantLanguage": "Python",
+      "category": "General",
+      "description": "General module with 25 files (Python)",
+      "subdirectories": [
+        {
+          "path": "focus_agent/tools",
+          "name": "tools",
+          "level": 2,
+          "numFiles": 7,
+          "totalLoc": 1315,
+          "dominantLanguage": "Python",
+          "category": "Tools/Scripts",
+          "description": "Tools/Scripts module with 7 files (Python)",
+          "subdirectories": []
+        }
+      ]
+    },
+    {
+      "path": "android",
+      "name": "android",
+      "level": 1,
+      "numFiles": 143,
+      "totalLoc": 4434,
+      "dominantLanguage": "Dart",
+      "category": "General",
+      "description": "# 📱 Focus Dashboard: Android Edition",
+      "subdirectories": [
+        {
+          "path": "android/lib",
+          "name": "lib",
+          "level": 2,
+          "numFiles": 11,
+          "totalLoc": 3159,
+          "dominantLanguage": "Dart",
+          "category": "Library",
+          "description": "Library module with 11 files (Dart)",
+          "subdirectories": []
+        },
+        {
+          "path": "android/linux",
+          "name": "linux",
+          "level": 2,
+          "numFiles": 10,
+          "totalLoc": 210,
+          "dominantLanguage": "C++",
+          "category": "General",
+          "description": "General module with 10 files (C++)",
+          "subdirectories": [
+            {
+              "path": "android/linux/runner",
+              "name": "runner",
+              "level": 3,
+              "numFiles": 4,
+              "totalLoc": 178,
+              "dominantLanguage": "C++",
+              "category": "General",
+              "description": "General module with 4 files (C++)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/linux/flutter",
+              "name": "flutter",
+              "level": 3,
+              "numFiles": 4,
+              "totalLoc": 32,
+              "dominantLanguage": "C++",
+              "category": "General",
+              "description": "General module with 4 files (C++)",
+              "subdirectories": []
+            }
+          ]
+        },
+        {
+          "path": "android/android",
+          "name": "android",
+          "level": 2,
+          "numFiles": 19,
+          "totalLoc": 105,
+          "dominantLanguage": "Kotlin Script",
+          "category": "General",
+          "description": "General module with 19 files (Kotlin Script)",
+          "subdirectories": [
+            {
+              "path": "android/android/app",
+              "name": "app",
+              "level": 3,
+              "numFiles": 14,
+              "totalLoc": 52,
+              "dominantLanguage": "Kotlin Script",
+              "category": "Application",
+              "description": "Application module with 14 files (Kotlin Script)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/android/gradle",
+              "name": "gradle",
+              "level": 3,
+              "numFiles": 1,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 1 files",
+              "subdirectories": []
+            }
+          ]
+        },
+        {
+          "path": "android/macos",
+          "name": "macos",
+          "level": 2,
+          "numFiles": 28,
+          "totalLoc": 64,
+          "dominantLanguage": "Swift",
+          "category": "General",
+          "description": "General module with 28 files (Swift)",
+          "subdirectories": [
+            {
+              "path": "android/macos/Runner",
+              "name": "Runner",
+              "level": 3,
+              "numFiles": 18,
+              "totalLoc": 30,
+              "dominantLanguage": "Swift",
+              "category": "General",
+              "description": "General module with 18 files (Swift)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/macos/Flutter",
+              "name": "Flutter",
+              "level": 3,
+              "numFiles": 3,
+              "totalLoc": 21,
+              "dominantLanguage": "Swift",
+              "category": "General",
+              "description": "General module with 3 files (Swift)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/macos/RunnerTests",
+              "name": "RunnerTests",
+              "level": 3,
+              "numFiles": 1,
+              "totalLoc": 13,
+              "dominantLanguage": "Swift",
+              "category": "Testing",
+              "description": "Testing module with 1 files (Swift)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/macos/Runner.xcodeproj",
+              "name": "Runner.xcodeproj",
+              "level": 3,
+              "numFiles": 3,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 3 files",
+              "subdirectories": []
+            },
+            {
+              "path": "android/macos/Runner.xcworkspace",
+              "name": "Runner.xcworkspace",
+              "level": 3,
+              "numFiles": 2,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 2 files",
+              "subdirectories": []
+            }
+          ]
+        },
+        {
+          "path": "android/ios",
+          "name": "ios",
+          "level": 2,
+          "numFiles": 39,
+          "totalLoc": 29,
+          "dominantLanguage": "Swift",
+          "category": "General",
+          "description": "General module with 39 files (Swift)",
+          "subdirectories": [
+            {
+              "path": "android/ios/Runner",
+              "name": "Runner",
+              "level": 3,
+              "numFiles": 26,
+              "totalLoc": 16,
+              "dominantLanguage": "Swift",
+              "category": "General",
+              "description": "General module with 26 files (Swift)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/ios/RunnerTests",
+              "name": "RunnerTests",
+              "level": 3,
+              "numFiles": 1,
+              "totalLoc": 13,
+              "dominantLanguage": "Swift",
+              "category": "Testing",
+              "description": "Testing module with 1 files (Swift)",
+              "subdirectories": []
+            },
+            {
+              "path": "android/ios/Runner.xcodeproj",
+              "name": "Runner.xcodeproj",
+              "level": 3,
+              "numFiles": 5,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 5 files",
+              "subdirectories": []
+            },
+            {
+              "path": "android/ios/Flutter",
+              "name": "Flutter",
+              "level": 3,
+              "numFiles": 3,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 3 files",
+              "subdirectories": []
+            },
+            {
+              "path": "android/ios/Runner.xcworkspace",
+              "name": "Runner.xcworkspace",
+              "level": 3,
+              "numFiles": 3,
+              "totalLoc": 0,
+              "category": "General",
+              "description": "General module with 3 files",
+              "subdirectories": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "ui",
+      "name": "ui",
+      "level": 1,
+      "numFiles": 14,
+      "totalLoc": 4122,
+      "dominantLanguage": "Python",
+      "category": "Web/UI",
+      "description": "Web/UI module with 14 files (Python)",
+      "subdirectories": []
+    },
+    {
+      "path": "tests",
+      "name": "tests",
+      "level": 1,
+      "numFiles": 21,
+      "totalLoc": 2545,
+      "dominantLanguage": "Python",
+      "category": "Testing",
+      "description": "Testing module with 21 files (Python)",
+      "subdirectories": []
+    },
+    {
+      "path": "docs",
+      "name": "docs",
+      "level": 1,
+      "numFiles": 7,
+      "totalLoc": 481,
+      "dominantLanguage": "Python",
+      "category": "Documentation",
+      "description": "Documentation module with 7 files (Python)",
+      "subdirectories": []
+    }
+  ],
+  "architecturalInsights": {
+    "coreApplications": [],
+    "entryPointDetails": [
+      {
+        "path": "../../../docs/make_banglish_guide.py",
+        "type": "Unknown",
+        "description": ""
+      },
+      {
+        "path": "../../../evaluate.py",
+        "type": "Unknown",
+        "description": ""
+      },
+      {
+        "path": "../../../main.py",
+        "type": "Python Application",
+        "description": "Python application entry point"
+      },
+      {
+        "path": "../../../setup.sh",
+        "type": "Unknown",
+        "description": ""
+      }
+    ],
+    "serviceArchitecture": {
+      "microservices": [],
+      "monoliths": [],
+      "libraries": []
+    },
+    "layeredArchitecture": {
+      "presentation": [
+        "ui"
+      ],
+      "business": [],
+      "data": [],
+      "infrastructure": []
+    }
+  },
+  "largeFiles": [],
+  "dependencies": {
+    "production": [
+      "customtkinter",
+      "pillow",
+      "tkcalendar",
+      "darkdetect",
+      "requests",
+      "pydantic",
+      "pypdf",
+      "python-docx",
+      "pytesseract",
+      "python-dotenv",
+      "pytest"
+    ],
+    "development": [],
+    "total": 11
+  },
+  "complexity": {
+    "averageFileSize": 93.12280701754386,
+    "maxFileSize": 0,
+    "nestedDepth": 0,
+    "estimatedComplexity": "medium"
+  },
+  "gitRepo": {
+    "firstCommitDate": "2026-11-05",
+    "totalCommits": 59,
+    "numContributors": 0,
+    "currentBranch": "develop/v2-agent-architecture",
+    "remoteUrls": [
+      "https://github.com/jahinhasan/Focus-app.git"
+    ]
+  },
+  "license": "MIT"
+}

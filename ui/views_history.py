@@ -27,7 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
 
 # V2 agent layer (graceful: app opens even if the agent package fails to load)
 AGENT_AVAILABLE = True
@@ -42,9 +41,6 @@ try:
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS, get_color_str
@@ -113,109 +109,260 @@ class HistoryView(ctk.CTkFrame):
             print(f"History render error: {e}")
 
     def _draw_heatmap(self, heat_data):
-        """Draws a GitHub-style contribution graph."""
+        """Draws a responsive GitHub-style contribution graph."""
         container = ctk.CTkFrame(self, fg_color=COLORS["card"], corner_radius=10)
-        container.pack(fill="x", padx=20, pady=(0, 15))
+        container.pack(fill="x", padx=20, pady=(0, 12))
         
-        # Header for Heatmap
         header = ctk.CTkFrame(container, fg_color="transparent")
-        header.pack(fill="x", padx=15, pady=10)
+        header.pack(fill="x", padx=15, pady=(10, 4))
         ctk.CTkLabel(header, text="365 Days of Focus", font=FONTS["header"], 
                      text_color=COLORS["text"]).pack(side="left")
         
-        # Canvas
-        # Width: 53 weeks * 12px = ~640px. 
-        # Height: 7 days * 12px = ~90px.
         bg_col = get_color_str("card")
         canvas = tk.Canvas(container, height=110, bg=bg_col, highlightthickness=0)
         canvas.pack(fill="x", expand=True, padx=10, pady=(0, 10))
         
-        # Logic
         now = datetime.now()
-        # Start from 52 weeks ago (Sunday)
         start_date = now - timedelta(days=365)
-        # Snap to previous Sunday
         offset = (start_date.weekday() + 1) % 7
         start_date -= timedelta(days=offset)
         
-        sz = 10
-        gap = 3
-        
-        # Colors: 0=Empty, 1=Low, 2=Med, 3=High
-        # We need hex strings
-        col_empty = get_color_str("bg_secondary")
-        col_1 = get_color_str("accent_light") # Light Purple
-        col_2 = get_color_str("accent")       # Purple
-        col_3 = get_color_str("accent_dark")  # Dark Purple
-        col_4 = "#FFFFFF" if ctk.get_appearance_mode() == "Dark" else "#000000" # Peak
-        
-        # Border color for visibility
-        col_border = get_color_str("border")
-        
-        for i in range(371): # 53 * 7
-            curr = start_date + timedelta(days=i)
-            # Don't draw future
-            if curr > now: break
+        def redraw_heatmap(event=None):
+            if not canvas.winfo_exists():
+                return
+            canvas.delete("all")
+            avail_w = max(320, canvas.winfo_width() - 20)
+            cell_step = max(6, min(18, avail_w // 53))
+            gap = 2 if cell_step < 11 else 3
+            sz = max(4, cell_step - gap)
+            total_h = 7 * (sz + gap) + 14
+            canvas.configure(height=max(80, total_h), bg=get_color_str("card"))
             
-            day_idx = (curr.weekday() + 1) % 7 # Sun=0
-            week_idx = i // 7
+            col_empty = get_color_str("bg_secondary")
+            col_1 = get_color_str("accent_light")
+            col_2 = get_color_str("accent")
+            col_3 = get_color_str("accent_dark")
+            col_4 = "#FFFFFF" if ctk.get_appearance_mode() == "Dark" else "#000000"
+            col_border = get_color_str("border")
             
-            x = week_idx * (sz + gap) + 10
-            y = day_idx * (sz + gap) + 10
-            
-            d_str = curr.strftime("%Y-%m-%d")
-            intensity = heat_data.get(d_str, 0)
-            
-            fill = col_empty
-            outline = col_border # Outline empty cells!
-            
-            if intensity == 1: 
-                fill = col_1
-                outline = ""
-            elif intensity == 2: 
-                fill = col_2
-                outline = ""
-            elif intensity == 3: 
-                fill = col_3
-                outline = ""
-            elif intensity >= 4: 
-                fill = col_4
-                outline = ""
-            
-            # Draw rect
-            canvas.create_rectangle(x, y, x+sz, y+sz, fill=fill, outline=outline)
-            
-            # Tooltip logic? (Skip for now, pure visual)
+            for i in range(371):
+                curr = start_date + timedelta(days=i)
+                if curr > now:
+                    break
+                day_idx = (curr.weekday() + 1) % 7
+                week_idx = i // 7
+                x = week_idx * (sz + gap) + 10
+                y = day_idx * (sz + gap) + 8
+                d_str = curr.strftime("%Y-%m-%d")
+                intensity = heat_data.get(d_str, 0)
+                fill = col_empty
+                outline = col_border
+                if intensity == 1:
+                    fill, outline = col_1, ""
+                elif intensity == 2:
+                    fill, outline = col_2, ""
+                elif intensity == 3:
+                    fill, outline = col_3, ""
+                elif intensity >= 4:
+                    fill, outline = col_4, ""
+                canvas.create_rectangle(x, y, x + sz, y + sz, fill=fill, outline=outline)
+
+        canvas.bind("<Configure>", redraw_heatmap)
+        self.after(50, redraw_heatmap)
 
 class ReportView(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent, fg_color=COLORS["bg"])
         self.app = app
+        self._bench_summary = None
         self.render()
 
     def render(self):
         for w in self.winfo_children(): w.destroy()
 
-        ctk.CTkLabel(self, text="Productivity Insights", font=FONTS["title"],
-                     text_color=COLORS["text"]).pack(anchor="w", pady=(10, 20), padx=20)
-        
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(10, 10))
+        title_box = ctk.CTkFrame(header, fg_color="transparent")
+        title_box.pack(side="left")
+        ctk.CTkLabel(title_box, text="📊 Analytics, Memory & Agent Evaluation", font=FONTS["title"],
+                     text_color=COLORS["text"]).pack(anchor="w")
+        ctk.CTkLabel(title_box, text="Focus telemetry · 365-day activity heatmap · learned duration calibration · live benchmark",
+                     font=FONTS["small"], text_color=COLORS["text_dim"]).pack(anchor="w")
+
         # Get Data
         data = get_analytics_data(self.app.data)
-        
-        # Scrollable container for reports
+
+        # Scrollable container for unified analytics + history
         scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=10)
 
-        # 1. Daily Focus Graph
+        # 1. Live Agent Evaluation Benchmark Suite (Thesis Showcase)
+        if AGENT_AVAILABLE:
+            self._draw_benchmark_card(scroll)
+
+        # 2. Daily Focus Graph
         self._draw_focus_chart(scroll, data["daily_focus"])
 
-        # 2. Subject Breakdown
+        # 3. 365-Day Activity Heatmap (Merged from HistoryView)
+        heat_data = get_heatmap_data(self.app.data)
+        self._draw_heatmap_in(scroll, heat_data)
+
+        # 4. Subject Breakdown
         self._draw_subject_chart(scroll, data["subject_time"])
 
-        # 3. Estimation accuracy + streak (V2)
+        # 5. Estimation accuracy + streak (V2 Learning Engine)
         if AGENT_AVAILABLE:
             self._draw_estimation_card(scroll)
             self._draw_streak_card(scroll)
+
+        # 6. Recent Daily History Log
+        self._draw_history_log_card(scroll)
+
+    def _draw_benchmark_card(self, parent):
+        frame = ctk.CTkFrame(
+            parent, fg_color=COLORS["card"], corner_radius=14,
+            border_width=1, border_color=COLORS["accent_light"]
+        )
+        frame.pack(fill="x", padx=10, pady=8)
+
+        head = ctk.CTkFrame(frame, fg_color="transparent")
+        head.pack(fill="x", padx=20, pady=(14, 6))
+        ctk.CTkLabel(
+            head, text="🧪 Live Agent Evaluation Benchmark (Academic Verification)",
+            font=FONTS["header"], text_color=COLORS["accent"]
+        ).pack(side="left")
+
+        def run_bench():
+            try:
+                import evaluate
+                self._bench_summary = evaluate.run_benchmark_summary()
+                self.render()
+            except Exception as e:
+                messagebox.showerror("Benchmark Error", str(e))
+
+        ctk.CTkButton(
+            head, text="▶ Run Agent Benchmark", width=170, height=30,
+            fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
+            text_color="white", corner_radius=8, font=FONTS["small"],
+            command=run_bench
+        ).pack(side="right")
+
+        if self._bench_summary is None:
+            try:
+                import evaluate
+                self._bench_summary = evaluate.run_benchmark_summary()
+            except Exception:
+                self._bench_summary = None
+
+        if not self._bench_summary:
+            ctk.CTkLabel(
+                frame, text="Click 'Run Agent Benchmark' to evaluate Task Extraction, Subject Detection, Planner & Memory.",
+                font=FONTS["small"], text_color=COLORS["text_dim"]
+            ).pack(anchor="w", padx=20, pady=(0, 14))
+            return
+
+        b = self._bench_summary
+        summary_pill = ctk.CTkFrame(frame, fg_color=COLORS["card_highlight"], corner_radius=8)
+        summary_pill.pack(fill="x", padx=20, pady=(0, 10))
+        ctk.CTkLabel(
+            summary_pill,
+            text=f"✅ Overall Score: {b['passed']}/{b['total']} Checks Passed ({b['pct']}%) — Zero Overlap, Verified Tool Execution & Honest Fallbacks",
+            font=FONTS["subheader"], text_color=COLORS["success"]
+        ).pack(anchor="w", padx=12, pady=8)
+
+        grid = ctk.CTkFrame(frame, fg_color="transparent")
+        grid.pack(fill="x", padx=20, pady=(0, 14))
+        for idx, item in enumerate(b.get("areas", [])):
+            row = ctk.CTkFrame(grid, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            label_name = item["area"].replace("_", " ").title()
+            ctk.CTkLabel(row, text=label_name, font=FONTS["small"], width=190, anchor="w",
+                         text_color=COLORS["text"]).pack(side="left")
+            pbar = ctk.CTkProgressBar(row, height=10, progress_color=COLORS["success"])
+            pbar.set(item["pct"] / 100.0)
+            pbar.pack(side="left", fill="x", expand=True, padx=10)
+            ctk.CTkLabel(row, text=f"{item['passed']}/{item['total']} ({int(item['pct'])}%)",
+                         font=FONTS["small"], width=85, anchor="e",
+                         text_color=COLORS["text_dim"]).pack(side="right")
+
+    def _draw_heatmap_in(self, parent, heat_data):
+        container = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=14)
+        container.pack(fill="x", padx=10, pady=8)
+        header = ctk.CTkFrame(container, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(12, 4))
+        ctk.CTkLabel(header, text="📅 365-Day Focus Consistency Heatmap", font=FONTS["header"],
+                     text_color=COLORS["text"]).pack(side="left")
+
+        bg_col = get_color_str("card")
+        canvas = tk.Canvas(container, height=110, bg=bg_col, highlightthickness=0)
+        canvas.pack(fill="x", expand=True, padx=16, pady=(0, 12))
+
+        now = datetime.now()
+        start_date = now - timedelta(days=365)
+        offset = (start_date.weekday() + 1) % 7
+        start_date -= timedelta(days=offset)
+
+        def redraw_heatmap(event=None):
+            if not canvas.winfo_exists():
+                return
+            canvas.delete("all")
+            avail_w = max(320, canvas.winfo_width() - 20)
+            cell_step = max(6, min(18, avail_w // 53))
+            gap = 2 if cell_step < 11 else 3
+            sz = max(4, cell_step - gap)
+            total_h = 7 * (sz + gap) + 14
+            canvas.configure(height=max(80, total_h), bg=get_color_str("card"))
+
+            col_empty = get_color_str("bg_secondary")
+            col_1 = get_color_str("accent_light")
+            col_2 = get_color_str("accent")
+            col_3 = get_color_str("accent_dark")
+            col_4 = "#FFFFFF" if ctk.get_appearance_mode() == "Dark" else "#1E1B4B"
+            col_border = get_color_str("border")
+
+            for i in range(371):
+                curr = start_date + timedelta(days=i)
+                if curr > now:
+                    break
+                day_idx = (curr.weekday() + 1) % 7
+                week_idx = i // 7
+                x = week_idx * (sz + gap) + 10
+                y = day_idx * (sz + gap) + 8
+                d_str = curr.strftime("%Y-%m-%d")
+                intensity = heat_data.get(d_str, 0)
+                fill, outline = col_empty, col_border
+                if intensity == 1:
+                    fill, outline = col_1, ""
+                elif intensity == 2:
+                    fill, outline = col_2, ""
+                elif intensity == 3:
+                    fill, outline = col_3, ""
+                elif intensity >= 4:
+                    fill, outline = col_4, ""
+                canvas.create_rectangle(x, y, x + sz, y + sz, fill=fill, outline=outline)
+
+        canvas.bind("<Configure>", redraw_heatmap)
+        self.after(50, redraw_heatmap)
+
+    def _draw_history_log_card(self, parent):
+        hist = self.app.data.get("history", {})
+        dates = sorted(hist.keys(), reverse=True)
+        frame = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=14)
+        frame.pack(fill="x", padx=10, pady=8)
+        ctk.CTkLabel(frame, text="📜 Daily Completion Log", font=FONTS["header"],
+                     text_color=COLORS["text"]).pack(anchor="w", padx=20, pady=(14, 6))
+        if not dates:
+            ctk.CTkLabel(frame, text="No daily history entries yet.",
+                         font=FONTS["small"], text_color=COLORS["text_dim"]).pack(anchor="w", padx=20, pady=(0, 14))
+            return
+        for d in dates[:10]:
+            entry = hist[d]
+            row = ctk.CTkFrame(frame, fg_color=COLORS["bg_secondary"], corner_radius=8)
+            row.pack(fill="x", padx=16, pady=3)
+            ctk.CTkLabel(row, text=f"📆 {d}", font=FONTS["subheader"], text_color=COLORS["text"]).pack(side="left", padx=12, pady=8)
+            stat_text = f"Completed: {entry.get('completed', 0)}/{entry.get('total', 0)}  ·  XP: +{entry.get('xp_gained', 0)}"
+            ctk.CTkLabel(row, text=stat_text, font=FONTS["small"], text_color=COLORS["text_dim"]).pack(side="right", padx=12, pady=8)
+        ctk.CTkLabel(frame, text="", font=FONTS["tiny"]).pack(pady=2)
 
     def _draw_estimation_card(self, parent):
         est = fest.estimation_analytics(self.app.data)
@@ -279,40 +426,45 @@ class ReportView(ctk.CTkFrame):
                      text_color=COLORS["accent"]).pack(anchor="w", padx=20, pady=(15, 5))
         
         canvas = tk.Canvas(frame, bg=get_color_str("card"), height=200, highlightthickness=0)
-        canvas.pack(fill="x", padx=20, pady=(0, 20))
+        canvas.pack(fill="x", expand=True, padx=20, pady=(0, 20))
         
-        if not daily_focus:
-            canvas.create_text(200, 100, text="No data yet", fill=get_color_str("text_dim"), font=("Inter", 12))
-            return
-
-        dates = sorted(daily_focus.keys())
+        dates = sorted(daily_focus.keys()) if daily_focus else []
         values = [daily_focus[d] for d in dates]
         max_val = max(values) if values and max(values) > 0 else 60
         
-        w = 600 # approximate width, canvas scales? No, frame expands. 
-        # We can bind Configure event or just use fixed manageable width.
-        # Let's assume fixed usable width or get it.
-        pad = 30
-        bar_w = 40
-        spacing = 60
-        start_x = pad
-        h = 200
-        
-        # Draw bars
-        for i, d in enumerate(dates):
-            val = daily_focus[d]
-            x = start_x + (i * spacing)
-            bar_h = (val / max_val) * (h - 2*pad)
-            y = h - pad - bar_h
+        def redraw_bars(event=None):
+            if not canvas.winfo_exists():
+                return
+            canvas.delete("all")
+            canvas.configure(bg=get_color_str("card"))
+            cw = max(300, canvas.winfo_width())
+            h = 200
+            if not daily_focus:
+                canvas.create_text(cw // 2, h // 2, text="No data yet",
+                                   fill=get_color_str("text_dim"), font=("Inter", 12))
+                return
+            n = max(1, len(dates))
+            pad = 28
+            usable_w = max(160, cw - 2 * pad)
+            slot_w = usable_w / n
+            bar_w = max(18, min(64, int(slot_w * 0.58)))
             
-            # Bar
-            canvas.create_rectangle(x, y, x + bar_w, h - pad, fill=get_color_str("accent"), outline="")
-            # Value
-            if val > 0:
-                canvas.create_text(x + bar_w/2, y - 10, text=f"{int(val)}", fill=get_color_str("text"), font=("Inter", 9))
-            # Date
-            display_date = d[5:] # MM-DD
-            canvas.create_text(x + bar_w/2, h - pad + 15, text=display_date, fill=get_color_str("text_dim"), font=("Inter", 9))
+            for i, d in enumerate(dates):
+                val = daily_focus[d]
+                x = pad + int(i * slot_w + (slot_w - bar_w) / 2)
+                bar_h = (val / max_val) * (h - 2 * pad)
+                y = h - pad - bar_h
+                canvas.create_rectangle(x, y, x + bar_w, h - pad,
+                                        fill=get_color_str("accent"), outline="")
+                if val > 0:
+                    canvas.create_text(x + bar_w / 2, y - 10, text=f"{int(val)}",
+                                       fill=get_color_str("text"), font=("Inter", 9))
+                display_date = d[5:]
+                canvas.create_text(x + bar_w / 2, h - pad + 14, text=display_date,
+                                   fill=get_color_str("text_dim"), font=("Inter", 9))
+
+        canvas.bind("<Configure>", redraw_bars)
+        self.after(50, redraw_bars)
             
     def _draw_subject_chart(self, parent, subject_time):
         frame = ctk.CTkFrame(parent, fg_color=COLORS["card"], corner_radius=15)

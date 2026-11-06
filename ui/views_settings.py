@@ -27,7 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
 
 # V2 agent layer (graceful: app opens even if the agent package fails to load)
 AGENT_AVAILABLE = True
@@ -42,17 +41,14 @@ try:
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
 
 
-class SettingsView(ctk.CTkFrame):
+class SettingsView(ctk.CTkScrollableFrame):
     def __init__(self, parent, app):
-        super().__init__(parent, fg_color=COLORS["bg"])
+        super().__init__(parent, fg_color=COLORS["bg"], scrollbar_button_color=COLORS["card"])
         self.app = app
         self.sliders = {} # Store slider references for save_settings
         self.render()
@@ -73,10 +69,11 @@ class SettingsView(ctk.CTkFrame):
                      text_color=COLORS["text"]).pack(anchor="w", pady=(10, 20), padx=20)
 
         # Appearance
-        self._draw_section("Appearance", [
-            ctk.CTkOptionMenu(self, values=["System", "Dark", "Light"],
-                              command=self._change_theme)
-        ])
+        app_frame = ctk.CTkFrame(self, fg_color=COLORS["card"], corner_radius=10)
+        app_frame.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(app_frame, text="Appearance", font=FONTS["header"]).pack(anchor="w", padx=15, pady=(10, 5))
+        ctk.CTkOptionMenu(app_frame, values=["System", "Dark", "Light"],
+                          command=self._change_theme).pack(anchor="w", padx=15, pady=(0, 12))
 
         # Pomodoro Settings
         pom = get_pomodoro_settings(self.app.data)
@@ -157,9 +154,9 @@ class SettingsView(ctk.CTkFrame):
         row2 = ctk.CTkFrame(frame, fg_color="transparent")
         row2.pack(fill="x", padx=15, pady=4)
         ctk.CTkLabel(row2, text="Endpoint:", width=90, anchor="w").pack(side="left")
-        self.endpoint_entry = ctk.CTkEntry(row2, width=280, placeholder_text="http://localhost:11434")
+        self.endpoint_entry = ctk.CTkEntry(row2, placeholder_text="http://localhost:11434")
         self.endpoint_entry.insert(0, cfg.get("endpoint", "http://localhost:11434"))
-        self.endpoint_entry.pack(side="left", padx=4)
+        self.endpoint_entry.pack(side="left", fill="x", expand=True, padx=4)
 
         row3 = ctk.CTkFrame(frame, fg_color="transparent")
         row3.pack(fill="x", padx=15, pady=4)
@@ -184,8 +181,9 @@ class SettingsView(ctk.CTkFrame):
                      "3) keep it running (`ollama serve`). Optional online research: set env vars "
                      "ONLINE_LLM_API_KEY / ONLINE_LLM_MODEL / ONLINE_LLM_BASE_URL - keys are read from the "
                      "environment only and never stored in data files.")
-        ctk.CTkLabel(frame, text=help_text, font=FONTS["tiny"], text_color=COLORS["text_muted"],
-                     wraplength=560, justify="left").pack(anchor="w", padx=15, pady=(4, 10))
+        self._help_lbl = ctk.CTkLabel(frame, text=help_text, font=FONTS["tiny"], text_color=COLORS["text_muted"],
+                                      wraplength=560, justify="left")
+        self._help_lbl.pack(anchor="w", padx=15, pady=(4, 10))
 
         # ---- study window (planner inputs) ----
         settings = self.app.data.get("settings", {})
@@ -193,15 +191,15 @@ class SettingsView(ctk.CTkFrame):
         srow = ctk.CTkFrame(frame, fg_color="transparent")
         srow.pack(fill="x", padx=15, pady=4)
         ctk.CTkLabel(srow, text="Study window:", width=90, anchor="w").pack(side="left")
-        self.study_start_e = ctk.CTkEntry(srow, width=70, placeholder_text="09:00")
+        self.study_start_e = ctk.CTkEntry(srow, width=75, placeholder_text="09:00")
         self.study_start_e.insert(0, study.get("start", "09:00"))
         self.study_start_e.pack(side="left", padx=4)
         ctk.CTkLabel(srow, text="to").pack(side="left", padx=4)
-        self.study_end_e = ctk.CTkEntry(srow, width=70, placeholder_text="22:00")
+        self.study_end_e = ctk.CTkEntry(srow, width=75, placeholder_text="22:00")
         self.study_end_e.insert(0, study.get("end", "22:00"))
         self.study_end_e.pack(side="left", padx=4)
-        ctk.CTkLabel(srow, text="Breaks between blocks (min):").pack(side="left", padx=(16, 4))
-        self.break_e = ctk.CTkEntry(srow, width=50)
+        ctk.CTkLabel(srow, text="Break (min):").pack(side="left", padx=(14, 4))
+        self.break_e = ctk.CTkEntry(srow, width=55)
         self.break_e.insert(0, str(settings.get("break_minutes", 10)))
         self.break_e.pack(side="left")
 

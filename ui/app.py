@@ -27,19 +27,13 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
 # Modern Premium Color Palette
-from .theme import COLORS, FONTS
+from .theme import COLORS, FONTS, init_responsive_fonts, scale_fonts_for_window
 from .widgets import SidebarButton, XPBar
 from .views_today import TodayView
 from .views_routine import RoutineView
 from .views_history import HistoryView, ReportView
 from .views_settings import SettingsView
-from .views_store import StoreView
 from .views_chat import ChatView
 from .views_planner import PlannerView
 from .views_goals import GoalsView
@@ -49,15 +43,23 @@ from .views_misc import HabitView, VaultView
 class FocusApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        init_responsive_fonts()
 
         self.title("Focus App")
         # Window Setup
         self.title("Focus Dashboard")
         self.center_window()
-        self.minsize(1000, 600)
+        self.minsize(720, 480)
         self.configure(fg_color=COLORS["bg"])
 
         self.data = load_data()
+
+        # Respect saved appearance mode, defaulting to crisp Light academic theme
+        saved_theme = (self.data.get("settings") or {}).get("theme", "Light")
+        if saved_theme in ("Light", "Dark"):
+            ctk.set_appearance_mode(saved_theme)
+        else:
+            ctk.set_appearance_mode("Light")
         
         # Run Automation
         process_daily_automation(self.data)
@@ -97,19 +99,26 @@ class FocusApp(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         # Sidebar
-        self.sidebar = ctk.CTkFrame(self, width=240, fg_color=COLORS["sidebar"], corner_radius=0)
+        self.sidebar_width = 230
+        self.sidebar_collapsed = False
+        self._user_toggled_sidebar = False
+        self.sidebar = ctk.CTkFrame(
+            self, width=self.sidebar_width, fg_color=COLORS["sidebar"],
+            corner_radius=0, border_width=1, border_color=COLORS["border"]
+        )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
         self.setup_sidebar()
 
         # Main content
         self.main_container = ctk.CTkFrame(self, fg_color=COLORS["bg"], corner_radius=0)
         self.main_container.grid(row=0, column=1, sticky="nsew")
 
-        self.top_bar = XPBar(self.main_container, self.data)
+        self.top_bar = XPBar(self.main_container, self.data, app=self)
         self.top_bar.pack(fill="x")
 
         self.view_container = ctk.CTkFrame(self.main_container, fg_color="transparent")
-        self.view_container.pack(fill="both", expand=True, padx=20, pady=10)
+        self.view_container.pack(fill="both", expand=True, padx=14, pady=(4, 10))
 
         self.views = {}
         self.init_views()
@@ -120,8 +129,115 @@ class FocusApp(ctk.CTk):
         
         # Enable mouse scrolling globally
         self.bind_mouse_scroll()
+
+        # Responsive window resize handling (debounced)
+        self._resize_job = None
+        self._last_size = (0, 0)
+        self.bind("<Configure>", self._on_window_resize)
+        self.after(120, lambda: self._apply_responsive_layout(self.winfo_width() or 1080, self.winfo_height() or 700))
         
         self.update_clock()
+
+    def _on_window_resize(self, event):
+        if event.widget is not self:
+            return
+        w, h = event.width, event.height
+        if abs(w - self._last_size[0]) < 8 and abs(h - self._last_size[1]) < 8:
+            return
+        self._last_size = (w, h)
+        if self._resize_job is not None:
+            try:
+                self.after_cancel(self._resize_job)
+            except Exception:
+                pass
+        self._resize_job = self.after(50, lambda: self._apply_responsive_layout(w, h))
+
+    def _apply_responsive_layout(self, width, height):
+        self._resize_job = None
+        if getattr(self, "zen_active", False):
+            return
+
+        # 1. Dynamically scale all reactive CTkFont objects across the entire app
+        scale_fonts_for_window(width, height)
+
+        compact_w = width < 940
+        very_short_h = height < 610
+        compact_h = height < 700
+
+        # 2. Target sidebar width (ALWAYS wide enough for icon + readable name)
+        if width < 840:
+            target_sb = 172
+        elif width < 1100:
+            target_sb = 202
+        else:
+            target_sb = 232
+
+        if target_sb != self.sidebar_width:
+            self.sidebar_width = target_sb
+            self.sidebar.configure(width=target_sb)
+
+        # 3. Adapt Brand Header (keep name visible, hide V2 pill only on narrow widths)
+        self.brand_frame.pack_configure(padx=10 if compact_w else 12, pady=(8 if compact_h else 12, 4))
+        if not compact_w:
+            self.v2_pill.pack(side="right", padx=(2, 0))
+        else:
+            self.v2_pill.pack_forget()
+        self.brand_lbl.pack(side="left")
+
+        # 4. Adapt Clock & Date Section
+        self.clock_section.pack_configure(padx=8 if compact_w else 10, pady=(2 if compact_h else 4, 6))
+        self.clock_lbl.pack_configure(pady=(4 if compact_h else 6, 0))
+        if very_short_h:
+            self.date_lbl.pack_forget()
+        else:
+            self.date_lbl.pack(pady=(0, 5))
+
+        # 5. Adapt Timer Card
+        self.timer_frame.pack_configure(padx=8 if compact_w else 10, pady=(0, 6 if compact_h else 8))
+        if very_short_h:
+            self.timer_header.pack_forget()
+        else:
+            self.timer_header.pack(fill="x", padx=10, pady=(6, 0), before=self.timer_lbl)
+        self.timer_lbl.pack_configure(pady=2 if compact_h else 3)
+        self.timer_btns.pack_configure(padx=8 if compact_w else 10, pady=(0, 6 if compact_h else 8))
+        btn_h_timer = 28 if compact_h else 32
+        ctrl_txt = "⏸ Pause" if self.timer_running else ("▶ Resume" if self.timer_seconds > 0 else "▶ Start")
+        self.timer_ctrl.configure(text=ctrl_txt, height=btn_h_timer)
+        self.stop_btn.configure(height=btn_h_timer, width=30 if compact_w else 32)
+
+        # 6. Adapt Navigation Section & Buttons (always icon + text)
+        if very_short_h:
+            self.nav_label.pack_forget()
+        else:
+            self.nav_label.pack(anchor="w", padx=14, pady=(2, 2), before=self.nav_container)
+
+        nav_btn_h = 28 if very_short_h else (32 if compact_h else 36)
+        nav_pad_y = 1 if compact_h else 2
+        nav_pad_x = 6 if compact_w else 8
+        for btn in self.nav_buttons.values():
+            btn.set_responsive_mode(
+                compact_text=compact_w,
+                btn_height=nav_btn_h,
+            )
+            btn.pack_configure(padx=nav_pad_x, pady=nav_pad_y)
+
+        # 7. Adjust main view container padding & notify top_bar + active view
+        pad_x = 8 if width < 860 else 14
+        self.view_container.pack_configure(padx=pad_x, pady=(4, 8))
+        content_w = max(380, width - target_sb - 2 * pad_x)
+
+        if hasattr(self, "top_bar") and hasattr(self.top_bar, "on_resize"):
+            try:
+                self.top_bar.on_resize(content_w)
+            except Exception:
+                pass
+
+        view = self.views.get(self.active_view)
+        if view and hasattr(view, "on_resize"):
+            try:
+                view.on_resize(content_w, height)
+            except Exception:
+                pass
     
     def setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts for navigation and actions."""
@@ -130,12 +246,11 @@ class FocusApp(ctk.CTk):
         # Quick actions
         self.bind("<Control-n>", lambda e: self.quick_add_task())
         self.bind("<Control-N>", lambda e: self.quick_add_task())
-        self.bind("<space>", lambda e: self.toggle_timer())
         self.bind("<Control-q>", lambda e: self.quit())
         self.bind("<Control-Q>", lambda e: self.quit())
         self.bind("<Escape>", lambda e: self.focus_set())  # Clear focus
         
-        # Timer controls
+        # Timer controls (Ctrl+T only — never bind bare <space> as it triggers while typing in inputs)
         self.bind("<Control-t>", lambda e: self.toggle_timer())
         self.bind("<Control-T>", lambda e: self.toggle_timer())
     
@@ -182,88 +297,104 @@ class FocusApp(ctk.CTk):
             widget = widget.master if hasattr(widget, 'master') else None
 
     def setup_sidebar(self):
-        """Setup enhanced sidebar with modern styling."""
-        # Clock section with gradient background
-        clock_section = ctk.CTkFrame(self.sidebar, fg_color=COLORS["card"], corner_radius=15)
-        clock_section.pack(fill="x", padx=15, pady=(20, 15))
+        """Setup responsive sidebar that always keeps icon + readable label visible."""
+        # Brand header
+        self.brand_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.brand_frame.pack(fill="x", padx=12, pady=(12, 4))
+
+        self.v2_pill = ctk.CTkFrame(self.brand_frame, fg_color=COLORS["card_highlight"], corner_radius=6)
+        self.v2_pill.pack(side="right", padx=(2, 0))
+        ctk.CTkLabel(self.v2_pill, text="V2 AI", font=FONTS["tiny"], text_color=COLORS["accent"]).pack(padx=6, pady=2)
+
+        self.brand_lbl = ctk.CTkLabel(
+            self.brand_frame, text="✦ Focus Agent", font=FONTS["brand"],
+            text_color=COLORS["accent"]
+        )
+        self.brand_lbl.pack(side="left")
+
+        # Clock + Date section with clean border
+        self.clock_section = ctk.CTkFrame(
+            self.sidebar, fg_color=COLORS["bg_secondary"], corner_radius=12,
+            border_width=1, border_color=COLORS["border"]
+        )
+        self.clock_section.pack(fill="x", padx=10, pady=(4, 6))
         
-        self.clock_lbl = ctk.CTkLabel(clock_section, text="00:00", font=FONTS["clock"],
+        self.clock_lbl = ctk.CTkLabel(self.clock_section, text="00:00", font=FONTS["clock"],
                                        text_color=COLORS["text"])
-        self.clock_lbl.pack(pady=(15, 5))
+        self.clock_lbl.pack(pady=(6, 0))
 
-        self.date_lbl = ctk.CTkLabel(clock_section, text="Date", text_color=COLORS["text_dim"],
-                                      font=FONTS["body"])
-        self.date_lbl.pack(pady=(0, 15))
+        self.date_lbl = ctk.CTkLabel(self.clock_section, text="Date", text_color=COLORS["text_dim"],
+                                      font=FONTS["small"])
+        self.date_lbl.pack(pady=(0, 6))
 
-        # Separator
-        separator = ctk.CTkFrame(self.sidebar, fg_color=COLORS["border"], height=1)
-        separator.pack(fill="x", padx=20, pady=10)
-
-        # Timer Frame (Moved to Top for Visibility)
-        self.timer_frame = ctk.CTkFrame(self.sidebar, fg_color=COLORS["card"], corner_radius=15,
+        # Timer Frame
+        self.timer_frame = ctk.CTkFrame(self.sidebar, fg_color=COLORS["card"], corner_radius=12,
                                         border_width=1, border_color=COLORS["border"])
-        self.timer_frame.pack(side="top", fill="x", padx=15, pady=(10, 10))
+        self.timer_frame.pack(side="top", fill="x", padx=10, pady=(0, 8))
 
-        timer_header = ctk.CTkFrame(self.timer_frame, fg_color="transparent")
-        timer_header.pack(fill="x", padx=15, pady=(12, 0))
+        self.timer_header = ctk.CTkFrame(self.timer_frame, fg_color="transparent")
+        self.timer_header.pack(fill="x", padx=10, pady=(6, 0))
         
-        self.timer_mode_lbl = ctk.CTkLabel(timer_header, text="🎯 Focus Session",
+        self.timer_mode_lbl = ctk.CTkLabel(self.timer_header, text="🎯 Focus Session",
                                            text_color=COLORS["success"], font=FONTS["small"])
         self.timer_mode_lbl.pack(side="left")
 
         self.timer_lbl = ctk.CTkLabel(self.timer_frame, text="00:00:00", font=FONTS["timer"],
                                        text_color=COLORS["text"])
-        self.timer_lbl.pack(pady=10)
+        self.timer_lbl.pack(pady=3)
 
         self.timer_btns = ctk.CTkFrame(self.timer_frame, fg_color="transparent")
-        self.timer_btns.pack(fill="x", padx=15, pady=(0, 15))
+        self.timer_btns.pack(fill="x", padx=10, pady=(0, 8))
 
-        self.timer_ctrl = ctk.CTkButton(self.timer_btns, text="▶ Start", height=40,
-                                        fg_color=COLORS["success"], hover_color=COLORS["success_dark"],
-                                        corner_radius=10, font=FONTS["body"],
+        self.timer_ctrl = ctk.CTkButton(self.timer_btns, text="▶ Start", height=32,
+                                        fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
+                                        corner_radius=8, font=FONTS["body"],
                                         command=self.toggle_timer)
         self.timer_ctrl.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        self.stop_btn = ctk.CTkButton(self.timer_btns, text="⏹", width=40, height=40,
-                                      fg_color=COLORS["error"], hover_color="#CC0000",
-                                      corner_radius=10, font=FONTS["header"],
+        self.stop_btn = ctk.CTkButton(self.timer_btns, text="⏹", width=32, height=32,
+                                      fg_color=COLORS["error"], hover_color="#B91C1C",
+                                      corner_radius=8, font=FONTS["subheader"],
                                       state="disabled",
                                       command=lambda: self.stop_timer(log=True))
         self.stop_btn.pack(side="right")
         
         # Navigation section
-        nav_label = ctk.CTkLabel(self.sidebar, text="NAVIGATION", font=FONTS["tiny"],
-                                  text_color=COLORS["text_muted"])
-        nav_label.pack(anchor="w", padx=20, pady=(5, 10))
+        self.nav_label = ctk.CTkLabel(self.sidebar, text="WORKSPACE", font=FONTS["tiny"],
+                                      text_color=COLORS["text_muted"])
+        self.nav_label.pack(anchor="w", padx=14, pady=(2, 2))
+
+        # Zen Mode Toggle (If unlocked) - Packed at bottom
+        zen_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        zen_frame.pack(side="bottom", fill="x", padx=10, pady=6)
+        
+        if is_unlocked(self.data, "zen_mode"):
+             ctk.CTkButton(zen_frame, text="🧘 Zen Mode", fg_color=COLORS["accent"],
+                           hover_color=COLORS["accent_dark"],
+                           command=self.toggle_zen_mode).pack(fill="x")
+
+        # Clean non-scrollbar navigation container so no scrollbar steals horizontal space
+        self.nav_container = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.nav_container.pack(fill="both", expand=True, padx=0, pady=(0, 4))
         
         self.nav_buttons = {}
         items = [
-            ("📅 Today", "today"),
-            ("🗓️ Routine", "routine"),
-            ("⚙️ Planner", "planner"),
-            ("🎯 Goals", "goals"),
-            ("🥗 Habits", "habits"),
-            ("📂 Vault", "vault"),
-            ("📜 History", "history"),
-            ("📊 Report", "report"),
-            ("🤖 Assistant", "assistant"),
-            ("🛒 Store", "store"),
-            ("⚙️ Settings", "settings")
+            ("🏠 Dashboard", "🏠 Dashboard", "today"),
+            ("🤖 AI Agent Console", "🤖 AI Agent", "assistant"),
+            ("🗓️ Daily Planner", "🗓️ Planner", "planner"),
+            ("📅 Class Routine", "📅 Routine", "routine"),
+            ("🎯 Goals & Roadmaps", "🎯 Goals", "goals"),
+            ("📚 Subject Vault", "📚 Vault", "vault"),
+            ("📊 Analytics & Insights", "📊 Analytics", "report"),
+            ("⚙️ Settings", "⚙️ Settings", "settings")
         ]
-        for text, key in items:
-            btn = SidebarButton(self.sidebar, text=text, command=lambda k=key: self.switch_view(k))
-            btn.pack(fill="x", padx=15, pady=3)
+        for full_txt, short_txt, key in items:
+            btn = SidebarButton(
+                self.nav_container, text=full_txt, short_text=short_txt,
+                command=lambda k=key: self.switch_view(k)
+            )
+            btn.pack(fill="x", padx=8, pady=2)
             self.nav_buttons[key] = btn
-
-        
-        # Zen Mode Toggle (If unlocked) - Moved to bottom of nav
-        zen_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        zen_frame.pack(side="bottom", fill="x", padx=15, pady=20)
-        
-        if is_unlocked(self.data, "zen_mode"):
-             ctk.CTkButton(zen_frame, text="🧘 Enter Zen Mode", fg_color=COLORS["accent"],
-                           hover_color=COLORS["accent_dark"],
-                           command=self.toggle_zen_mode).pack(fill="x")
 
     def init_views(self):
         # Lazy loading: store view classes, create instances on first access
@@ -274,11 +405,10 @@ class FocusApp(ctk.CTk):
             "goals": GoalsView,
             "habits": HabitView,
             "vault": VaultView,
-            "history": HistoryView,
+            "history": ReportView,
             "report": ReportView,
             "assistant": ChatView,
             "settings": SettingsView,
-            "store": StoreView
         }
         self.views = {}  # Instances will be created on demand
         
@@ -309,6 +439,13 @@ class FocusApp(ctk.CTk):
 
             self.active_view = name
             if hasattr(view, "render"): view.render()
+            if hasattr(view, "on_resize"):
+                try:
+                    w = self.winfo_width() or 1050
+                    h = self.winfo_height() or 700
+                    view.on_resize(max(400, w - self.sidebar_width - 32), h)
+                except Exception:
+                    pass
 
     def refresh_xp(self):
         self.top_bar.render()
@@ -345,8 +482,10 @@ class FocusApp(ctk.CTk):
                 self.active_class_id = None
         
         # Auto-Attendance Check
-        ended_classes = sync_class_statuses(self.data)
+        sync_res = sync_class_statuses(self.data)
+        ended_classes = sync_res[0] if isinstance(sync_res, tuple) else sync_res
         if ended_classes:
+            from logic import mark_class_missed
             for task_id in ended_classes:
                 task = get_task_by_id(self.data, task_id)
                 if task:
@@ -354,6 +493,8 @@ class FocusApp(ctk.CTk):
                         mark_class_done(self.data, task_id)
                         add_xp(self.data, 20) 
                         self.refresh_xp()
+                    else:
+                        mark_class_missed(self.data, task_id)
 
         self.after(1000, self.update_clock)
 
@@ -430,6 +571,22 @@ class FocusApp(ctk.CTk):
         else:
             self.start_timer()
 
+    def start_focus_for_task(self, title, duration_minutes=25):
+        """Start a focus timer session for a specific task or planner slot."""
+        if self.timer_running:
+            self.stop_timer(log=True)
+        style = self.data.get("settings", {}).get("timer_style", "stopwatch")
+        mins = max(5, int(duration_minutes or 25))
+        if style == "countdown":
+            self.timer_seconds = mins * 60
+        else:
+            self.timer_seconds = 0
+        self.timer_mode = "focus"
+        self.active_class_id = None
+        short_title = (title or "Focus").strip()[:22]
+        self.timer_mode_lbl.configure(text=f"🎯 {short_title}", text_color=COLORS["accent"])
+        self.start_timer()
+
     def start_timer(self):
         # Countdown Init Logic
         style = self.data.get("settings", {}).get("timer_style", "stopwatch")
@@ -442,7 +599,12 @@ class FocusApp(ctk.CTk):
             
         self.timer_running = True
         self.last_tick = datetime.now()
-        self.timer_ctrl.configure(text="⏸ Pause", fg_color=COLORS["warning"])
+        if not getattr(self, "session_started_hhmm", None):
+            self.session_started_hhmm = self.last_tick.strftime("%H:%M")
+        self.timer_ctrl.configure(
+            text="⏸" if getattr(self, "sidebar_collapsed", False) else "⏸ Pause",
+            fg_color=COLORS["warning"],
+        )
         self.stop_btn.configure(state="normal") # Enable stop
         
         # Reset target state for Pomodoro check (Stopwatch mode only)
@@ -461,24 +623,34 @@ class FocusApp(ctk.CTk):
     def pause_timer(self):
         self.timer_running = False
         self.last_tick = None
-        self.timer_ctrl.configure(text="▶ Resume", fg_color=COLORS["success"])
+        self.timer_ctrl.configure(
+            text="▶" if getattr(self, "sidebar_collapsed", False) else "▶ Resume",
+            fg_color=COLORS["success"],
+        )
         update_timer_state(self.data, self.timer_seconds, self.timer_mode, self.active_class_id, is_running=False)
 
     def stop_timer(self, log=False):
         self.timer_running = False
+        started_hhmm = getattr(self, "session_started_hhmm", None)
         if log and self.timer_seconds > 5:
             if self.timer_mode == "class" and self.active_class_id:
                 log_class_session(self.data, self.timer_seconds, self.active_class_id)
-                log_focus_session(self.data, self.timer_seconds, session_type="class")
+                log_focus_session(self.data, self.timer_seconds, session_type="class",
+                                  started_hhmm=started_hhmm)
             else:
-                log_focus_session(self.data, self.timer_seconds, session_type="focus")
+                log_focus_session(self.data, self.timer_seconds, session_type="focus",
+                                  started_hhmm=started_hhmm)
             self.refresh_xp()
         
         self.timer_seconds = 0
+        self.session_started_hhmm = None
         clear_timer_state(self.data) # Logic Clear
         
         self.timer_lbl.configure(text="00:00:00")
-        self.timer_ctrl.configure(text="▶ Start", fg_color=COLORS["success"])
+        self.timer_ctrl.configure(
+            text="▶" if getattr(self, "sidebar_collapsed", False) else "▶ Start",
+            fg_color=COLORS["success"],
+        )
         self.stop_btn.configure(state="disabled") # Disable instead of hide
         self.last_tick = None
 
@@ -546,14 +718,17 @@ class FocusApp(ctk.CTk):
              self.main_container.grid()
 
     def center_window(self, scale=0.85):
-        """Dynamic window sizing based on screen resolution."""
+        """Dynamic window sizing based on screen resolution (multi-monitor safe)."""
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         
-        w = int(screen_width * scale)
-        h = int(screen_height * scale)
-        x = int((screen_width - w) / 2)
-        y = int((screen_height - h) / 2)
+        # Cap to single-monitor dimensions when X11 reports combined multi-head width
+        single_w = min(screen_width, 1920)
+        single_h = min(screen_height, 1080)
+        w = max(1050, int(single_w * scale))
+        h = max(700, int(single_h * scale))
+        x = int((single_w - w) / 2)
+        y = int((single_h - h) / 2)
         
         self.geometry(f"{w}x{h}+{x}+{y}")
 

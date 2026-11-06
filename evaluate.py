@@ -469,5 +469,52 @@ def run_memory_effectiveness():
            adh["ratio"] == 0.5, f"{adh['slots_honored']}/{adh['slots_total']} honored")
 
 
+def run_benchmark_summary():
+    """Run all benchmark suites safely without mutating the active app data file."""
+    import logic as _logic
+    import storage as _storage
+    orig_logic_file = getattr(_logic, "DATA_FILE", None)
+    orig_storage_file = getattr(_storage, "DATA_FILE", None)
+    results.clear()
+    try:
+        run_extraction()
+        run_subject_assignment()
+        run_schedule_feasibility()
+        run_tool_scenario()
+        run_estimation()
+        run_dataset(live_provider=None)
+        run_planner_quality()
+        run_memory_effectiveness()
+    finally:
+        if orig_logic_file is not None:
+            _logic.DATA_FILE = orig_logic_file
+        if orig_storage_file is not None:
+            _storage.DATA_FILE = orig_storage_file
+
+    by_area = {}
+    for r in results:
+        by_area.setdefault(r["area"], []).append(r)
+
+    areas = []
+    total_pass = total = 0
+    for area, items in by_area.items():
+        p = sum(1 for i in items if i["pass"])
+        n = len(items)
+        total_pass += p
+        total += n
+        areas.append({
+            "area": area,
+            "passed": p,
+            "total": n,
+            "pct": round(100.0 * p / n, 1) if n else 100.0,
+        })
+    return {
+        "passed": total_pass,
+        "total": total,
+        "pct": round(100.0 * total_pass / total, 1) if total else 100.0,
+        "areas": areas,
+    }
+
+
 if __name__ == "__main__":
     sys.exit(main())

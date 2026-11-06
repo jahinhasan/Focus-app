@@ -27,11 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS, get_color_str
 
@@ -99,8 +94,11 @@ class DaySelector(ctk.CTkFrame):
 # ==================== COMPONENTS ====================
 
 class SidebarButton(ctk.CTkButton):
-    """Enhanced sidebar navigation button with modern styling."""
-    def __init__(self, parent, text, command, icon=None, **kwargs):
+    """Responsive sidebar navigation button that ALWAYS keeps icon + readable label visible."""
+    def __init__(self, parent, text, command, short_text=None, **kwargs):
+        self._is_active = False
+        self.full_text = text
+        self.short_text = short_text or text
         super().__init__(
             parent,
             text=text,
@@ -110,20 +108,29 @@ class SidebarButton(ctk.CTkButton):
             hover_color=COLORS["card_hover"],
             anchor="w",
             font=FONTS["body"],
-            height=48,
-            corner_radius=12,
+            height=36,
+            corner_radius=10,
             **kwargs
         )
-        # Bind hover events for visual feedback
-        self.bind("<Enter>", self._on_enter)
-        self.bind("<Leave>", self._on_leave)
-        self._is_active = False
+
+    def set_responsive_mode(self, compact_text=False, btn_height=36):
+        """Adapt button label (full vs concise) and height while always keeping icon + name visible."""
+        label_to_use = self.short_text if compact_text else self.full_text
+        font_to_use = FONTS["small"] if compact_text else FONTS["body"]
+        self.configure(
+            text=label_to_use,
+            anchor="w",
+            height=btn_height,
+            font=font_to_use,
+        )
     
     def _on_enter(self, event=None):
+        super()._on_enter(event)
         if not self._is_active:
             self.configure(text_color=COLORS["text"])
     
     def _on_leave(self, event=None):
+        super()._on_leave(event)
         if not self._is_active:
             self.configure(text_color=COLORS["text_dim"])
     
@@ -176,60 +183,100 @@ class Tooltip:
             self.tooltip = None
 
 class XPBar(ctk.CTkFrame):
-    """Enhanced XP progress bar with level badge and gradient styling."""
-    def __init__(self, parent, data):
+    """Enhanced top status bar with Level badge, XP bar, Focus stats, Streak, and Theme toggle."""
+    def __init__(self, parent, data, app=None):
         super().__init__(parent, fg_color="transparent")
         self.data = data
+        self.app = app
+        self._compact = False
         self.render()
 
     def render(self):
         for w in self.winfo_children(): w.destroy()
 
-        container = ctk.CTkFrame(self, fg_color=COLORS["card"], corner_radius=15)
-        container.pack(fill="x", padx=20, pady=10)
+        self.container = ctk.CTkFrame(
+            self, fg_color=COLORS["card"], corner_radius=12,
+            border_width=1, border_color=COLORS["border"]
+        )
+        self.container.pack(fill="x", padx=14, pady=(8, 4))
         
-        inner = ctk.CTkFrame(container, fg_color="transparent")
-        inner.pack(fill="x", padx=20, pady=15)
+        inner = ctk.CTkFrame(self.container, fg_color="transparent")
+        inner.pack(fill="x", padx=12, pady=7)
 
         lvl = self.data.get("level", 1)
         
-        # Level Badge with glow effect
-        badge_frame = ctk.CTkFrame(inner, fg_color=COLORS["accent"], corner_radius=10, width=70, height=36)
+        # 1. Left: Level Badge
+        badge_frame = ctk.CTkFrame(inner, fg_color=COLORS["accent"], corner_radius=8, height=30)
         badge_frame.pack(side="left")
-        badge_frame.pack_propagate(False)
-        
         ctk.CTkLabel(badge_frame, text=f"⭐ LVL {lvl}", text_color="white",
-                     font=FONTS["subheader"]).pack(expand=True)
+                     font=FONTS["small"]).pack(padx=10, pady=4)
 
-        curr, req, pct = get_level_progress(self.data)
-
-        # Progress container
-        progress_container = ctk.CTkFrame(inner, fg_color="transparent")
-        progress_container.pack(side="left", fill="x", expand=True, padx=20)
-
-        # Progress bar with gradient look (using two colors)
-        self.progress_bar = ctk.CTkProgressBar(
-            progress_container, 
-            fg_color=COLORS["border"],
-            progress_color=COLORS["success"],  # Teal color
-            height=12,
-            corner_radius=6
+        # 2. Right-side fixed items packed BEFORE expanding progress bar so they are never clipped
+        mode = ctk.get_appearance_mode()
+        theme_label = "🌙 Dark" if mode == "Light" else "☀️ Light"
+        self.theme_btn = ctk.CTkButton(
+            inner, text=theme_label, width=72, height=28, corner_radius=8,
+            fg_color=COLORS["bg_secondary"], hover_color=COLORS["card_hover"],
+            text_color=COLORS["text"], font=FONTS["small"],
+            command=self._toggle_theme
         )
-        self.progress_bar.set(pct / 100)
-        self.progress_bar.pack(fill="x")
+        self.theme_btn.pack(side="right", padx=(6, 0))
 
-        # XP Text with styling
-        xp_text = ctk.CTkLabel(inner, text=f"{curr} / {req} XP", text_color=COLORS["text_dim"],
-                     font=FONTS["small"])
-        xp_text.pack(side="left")
+        focus_stats = get_today_focus_stats(self.data)
+        self._focus_mins = int((focus_stats.get("total_seconds", 0) + focus_stats.get("class_seconds", 0)) // 60)
+        focus_badge = ctk.CTkFrame(inner, fg_color=COLORS["card_highlight"], corner_radius=8)
+        focus_badge.pack(side="right", padx=4)
+        focus_txt = f"⏱ {self._focus_mins}m" if self._compact else f"⏱ {self._focus_mins}m today"
+        self.focus_lbl = ctk.CTkLabel(focus_badge, text=focus_txt, text_color=COLORS["accent"],
+                                      font=FONTS["small"])
+        self.focus_lbl.pack(padx=10, pady=4)
         
-        # Streak indicator (if streak exists)
         streak = self.data.get("streak", 0)
         if streak > 0:
             streak_badge = ctk.CTkFrame(inner, fg_color=COLORS["warning"], corner_radius=8)
-            streak_badge.pack(side="right", padx=10)
-            ctk.CTkLabel(streak_badge, text=f"🔥 {streak} days", text_color="#1a1a1a",
+            streak_badge.pack(side="right", padx=4)
+            ctk.CTkLabel(streak_badge, text=f"🔥 {streak}d", text_color="white",
                         font=FONTS["small"]).pack(padx=8, pady=4)
+
+        curr, req, pct = get_level_progress(self.data)
+        self.xp_text = ctk.CTkLabel(inner, text=f"{curr}/{req} XP", text_color=COLORS["text_dim"],
+                                    font=FONTS["small"])
+        self.xp_text.pack(side="right", padx=(0, 8))
+
+        # 3. Middle: Expanding Progress Bar (fills remaining space cleanly)
+        progress_container = ctk.CTkFrame(inner, fg_color="transparent")
+        progress_container.pack(side="left", fill="x", expand=True, padx=12)
+
+        self.progress_bar = ctk.CTkProgressBar(
+            progress_container, 
+            fg_color=COLORS["bg_secondary"],
+            progress_color=COLORS["accent"],
+            height=10,
+            corner_radius=5
+        )
+        self.progress_bar.set(max(0.02, min(1.0, pct / 100)))
+        self.progress_bar.pack(fill="x")
+
+    def on_resize(self, content_width):
+        compact = content_width < 620
+        if compact != self._compact:
+            self._compact = compact
+            if hasattr(self, "focus_lbl") and self.focus_lbl.winfo_exists():
+                self.focus_lbl.configure(
+                    text=f"⏱ {self._focus_mins}m" if compact else f"⏱ {self._focus_mins}m today"
+                )
+
+    def _toggle_theme(self):
+        new_mode = "Dark" if ctk.get_appearance_mode() == "Light" else "Light"
+        ctk.set_appearance_mode(new_mode)
+        self.data.setdefault("settings", {})["theme"] = new_mode
+        save_data(self.data)
+        self.render()
+        if self.app and self.app.active_view in self.app.views:
+            try:
+                self.app.views[self.app.active_view].render()
+            except Exception:
+                pass
 
 
 # ==================== VIEWS ====================

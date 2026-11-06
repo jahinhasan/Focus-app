@@ -15,13 +15,35 @@ STOP_PREFIXES = {"class", "lecture", "lab", "exam", "test", "quiz",
                  "assignment", "homework", "project", "study", "revision",
                  "practice", "session", "the", "my", "a", "an", "for", "of"}
 
+SUBJECT_ALIAS_GROUPS = (
+    {"math", "maths", "mathematics", "calculus", "gonit", "গণিত"},
+    {"ai", "artificial intelligence"},
+    {"dbms", "database systems", "database management systems"},
+    {"os", "operating systems", "operating system"},
+    {"cn", "networking", "data communication", "data comm", "computer networks"},
+    {"dsa", "data structures", "data structures and algorithms"},
+    {"se", "software engineering"},
+    {"ml", "machine learning"},
+    {"physics", "phy", "পদার্থবিজ্ঞান", "পদার্থ"},
+)
+
+
+def _are_aliases(a, b):
+    """True when normalized names a and b belong to the same academic alias group."""
+    if not a or not b:
+        return False
+    for grp in SUBJECT_ALIAS_GROUPS:
+        if a in grp and b in grp:
+            return True
+    return False
+
 
 def _normalize(text):
-    """Lowercase, strip punctuation/course codes and filler words."""
+    """Lowercase, strip punctuation/course codes and filler words (preserves Bangla vowel marks)."""
     if not text:
         return ""
     t = str(text).lower()
-    t = re.sub(r"[^\w\s+-]", " ", t)
+    t = re.sub(r"[!\"#$%&'()*.,/:;<=>?@\[\\\]^_`{|}~]", " ", t)
     t = re.sub(r"\b[a-z]{2,4}[- ]?\d{3,4}\b", " ", t)  # course codes: CSE2203
     tokens = [w for w in t.split() if w and w not in STOP_PREFIXES and not w.isdigit()]
     return " ".join(tokens) if tokens else str(text).lower().strip()
@@ -71,7 +93,7 @@ def match_subject(mention, data):
         if title and _normalize(title) == nm:
             subj = task.get("subject") or title
             return {"subject": subj, "confidence": 1.0, "source": "routine",
-                    "matched_on": "class title"}
+                    "matched_on": "class title", "auto": True}
 
     known = get_known_subjects(data)
     if not known:
@@ -85,6 +107,8 @@ def match_subject(mention, data):
         score, how = 0.0, None
         if nm == nn:
             score, how = 1.0, "exact"
+        elif _are_aliases(nm, nn):
+            score, how = 0.95, "alias"
         elif nm and nn and (nm in nn or nn in nm):
             score, how = 0.9, "contains"
         else:

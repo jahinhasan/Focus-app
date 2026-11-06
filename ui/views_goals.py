@@ -27,7 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
 
 # V2 agent layer (graceful: app opens even if the agent package fails to load)
 AGENT_AVAILABLE = True
@@ -42,9 +41,6 @@ try:
 except Exception as _agent_err:  # pragma: no cover
     AGENT_AVAILABLE = False
     print(f"Agent layer unavailable: {_agent_err}")
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
 
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS

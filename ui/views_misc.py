@@ -27,11 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
 
@@ -311,7 +306,7 @@ class VaultView(ctk.CTkFrame):
         txt.configure(state="disabled")
         
         def run_summ():
-            from ai_parser import summarize_with_ai
+            from focus_agent.media_import import summarize_with_ai
             summary = summarize_with_ai(path)
             txt.configure(state="normal")
             txt.delete("1.0", "end")

@@ -76,7 +76,8 @@ class AgentController:
 
     def _compact_context(self):
         data = self.data
-        lvl, xp, _ = get_level_progress(data)
+        lvl = data.get("level", 1)
+        xp = data.get("xp", 0)
         settings = data.get("settings") or {}
         now = fdates.now_here(settings)
         today_tasks = [t for t in get_today_tasks(data) if t.get("type") != "class"]
@@ -421,12 +422,14 @@ class AgentController:
                              f"({comp['completed_total']} total)")
             return AgentReply("\n".join(lines))
         if action == "stats":
-            lvl, xp, pct = get_level_progress(data)
+            curr, req, pct = get_level_progress(data)
+            lvl = data.get("level", 1)
+            xp = data.get("xp", 0)
             focus = get_today_focus_stats(data)
             streak = data.get("streak", 0)
             return AgentReply(
                 f"📊 **Your Stats**\n"
-                f"⭐ Level {lvl} — {xp} XP ({int(pct)}% to next level)\n"
+                f"⭐ Level {lvl} — {xp} XP ({curr}/{req} XP, {int(pct)}% to next level)\n"
                 f"🔥 {streak}-day activity streak\n"
                 f"⏱ Today: {focus['formatted_total']} focus"
                 + (f" + {focus['formatted_class']} class time" if focus["class_seconds"] else ""))
@@ -650,10 +653,6 @@ class AgentController:
             msg = q
         elif q:
             msg = f"{msg}\n\n❓ {q}"
-        if intent == "add_task" or intent == "update_task":
-            q = outcome.pending.get("question") if outcome.pending else None
-            if q:
-                msg = (msg + f"\n\n❓ {q}").strip()
         if intent == "complete_task" and outcome.ok_count:
             settings = self.data.get("settings") or {}
             plan = fsched.reschedule_after_change(self.data, fdates.today_str(settings),

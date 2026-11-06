@@ -27,11 +27,6 @@ from logic import (
 )
 import subprocess
 import storage
-from ai_parser import format_today_schedule, format_user_stats
-# ==================== CONFIG ====================
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
 # Modern Premium Color Palette
 from .theme import COLORS, FONTS
 from .widgets import TimePicker, DaySelector
