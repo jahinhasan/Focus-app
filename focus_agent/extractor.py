@@ -71,10 +71,10 @@ def detect_intent(text):
     if re.search(r"^\s*(delete|remove|bad\s+dao|muche\s+felo)\b", low) or \
             re.search(r"^(ডিলিট|মুছে\s*ফেলো|বাদ\s*দাও)", low):
         return "delete_task", None
-    if re.search(r"\b(goal|roadmap|milestone|learning path|master\s+plan)\b", low) or \
+    if re.search(r"\b(goal|roadmap|milestone|milestones|millstone|mailstone|learning path|master\s+plan)\b", low) or \
             re.search(r"\bi\s+(want|would like)\s+to\s+(learn|master|study)\b", low) or \
-            re.search(r"\b(ami\s+.*\s+shikhte\s+chai|shikhte\s+chai)\b", low) or \
-            re.search(r"(শিখতে\s*চাই|রোডম্যাপ)", low) or \
+            re.search(r"\b(shikhte|shikte|sikhte|shokte)\s+(chai|cai|chay|hobe)\b", low) or \
+            re.search(r"(শিখতে\s*চাই|রোডম্যাপ|মাইলস্টোন)", low) or \
             re.search(r"\bmy goal is\b", low):
         return "goal", None
     if re.match(r"^(analyze|analysis|how productive|productivity)\b", low):
@@ -295,6 +295,44 @@ def clean_title(text, due_matched=None, dur_matched=None, time_matched=None):
     return t
 
 
+def clean_goal_title(text):
+    """Extract a clean learning goal title from English, Banglish, or Bengali text."""
+    raw = (text or "").strip()
+    # 1. Explicit English "learn/master/study X"
+    m = re.search(
+        r"\b(?:learn|study|master)\s+([a-zA-Z0-9+#.\s-]{2,60}?)(?=\s+(?:in|by|within|for|with|and|create|make|give|amk|amake)\b|[.;,]|$)",
+        raw, re.IGNORECASE,
+    )
+    if m:
+        topic = m.group(1).strip(" ,.:;-")
+        return clean_str(f"Learn {topic.title() if topic.islower() else topic}", 200)
+
+    # 2. Banglish "ami <topic> shikte/sikhte/shikhte chai/cai"
+    m_bn = re.search(
+        r"(?:\b(?:ami|amar)\s+)?([a-zA-Z0-9+#.\s-]{2,50}?)\s+(?:shikhte|shikte|sikhte|shokte)\s+(?:chai|cai|chay|hobe)\b",
+        raw, re.IGNORECASE,
+    )
+    if m_bn:
+        topic = re.sub(r"^\b(ami|amar|ekta|full|puro)\b\s*", "", m_bn.group(1), flags=re.IGNORECASE).strip(" ,.:;-")
+        if topic:
+            return clean_str(f"Learn {topic.title() if topic.islower() else topic}", 200)
+
+    # 3. General cleanup of Banglish/English roadmap scaffolding
+    t = re.sub(
+        r"\b(ami|amar|amk|amake|full|puro|sob|shob|milestone|milestones|millstone|mailstone|roadmap|"
+        r"soho|shoho|banay|baniye|banao|dao|den|de|ki\s+ki|shikhte|shikte|sikhte|shokte|chai|cai|hobe|"
+        r"create|make|build|give|me|a|an|the|with|for|in|two|three|four|six|months?|weeks?)\b",
+        " ", raw, flags=re.IGNORECASE,
+    )
+    t = re.sub(r"(?:আমি|আমাকে|ফুল|মাইলস্টোন|রোডম্যাপ|সহ|বানিয়ে|বানাও|দাও|কী\s*কী|কি\s*কি|শিখতে\s*চাই|শিখতে\s*হবে)", " ", t)
+    t = re.sub(r"\s+", " ", t).strip(" ,.:;-")
+    if t and len(t) >= 2:
+        if not t.lower().startswith(("learn ", "master ", "study ")):
+            t = f"Learn {t.title() if t.islower() else t}"
+        return clean_str(t, 200)
+    return clean_str(raw, 200) or "Learning Goal"
+
+
 def parse_task_segment(segment, now=None, settings=None):
     """Deterministic extraction for one task phrase. Returns ExtractedTask."""
     if now is None:
@@ -360,9 +398,7 @@ def extract_deterministic(text, now=None, settings=None):
         return result
 
     if intent == "goal":
-        m = re.search(r"\b(?:learn|study|master|complete|finish)\s+(?:[^.;]{2,80})",
-                      text, re.IGNORECASE)
-        goal_title = clean_str(m.group(0), 200) if m else clean_str(text, 200)
+        goal_title = clean_goal_title(text)
         result.goal = {"title": goal_title, "description": clean_str(text, 1000)}
         return result
 
@@ -744,21 +780,27 @@ def extract(text, provider=None, now=None, settings=None, subject_names=None):
                 if not lt2.task_ref and dt2.task_ref:
                     lt2.task_ref = dt2.task_ref
         # Structural intents anchored on explicit keywords ("plan my day",
-        # "reschedule", "don't schedule") beat model inference - same rule as
-        # dates: keyword evidence wins.
+        # "reschedule", "don't schedule", "milestone/roadmap") beat model inference
         elif det.intent in ("plan_day", "block_time", "reschedule",
-                            "complete_task", "delete_task", "query") \
+                            "complete_task", "delete_task", "query", "goal") \
                 and llm_res.intent != det.intent:
             llm_res.intent = det.intent
             llm_res.warnings.append(f"intent taken from local parser ({det.intent}) "
                                     f"over model's ({llm_res.intent})")
+            if det.intent == "goal" and not llm_res.goal:
+                llm_res.goal = det.goal
             for lt3, dt3 in zip(llm_res.tasks, det.tasks):
                 if not lt3.task_ref and dt3.task_ref:
                     lt3.task_ref = dt3.task_ref
+        if llm_res.intent == "goal" and not llm_res.goal:
+            llm_res.goal = det.goal or {
+                "title": clean_goal_title(text),
+                "description": clean_str(text, 1000),
+            }
         # model found nothing actionable but the local parser did (e.g. model
-        # answered "goal" for a concrete task request) -> trust the parser
+        # answered "goal" for a concrete task request without a goal object) -> trust the parser
         if not llm_res.tasks and det.intent == "add_task" and det.tasks \
-                and llm_res.intent in ("goal", "unknown"):
+                and (llm_res.intent == "unknown" or (llm_res.intent == "goal" and not llm_res.goal)):
             det.warnings.append("intent/tasks taken from local parser "
                                 f"(model said {llm_res.intent})")
             return det

@@ -62,11 +62,30 @@ class ChatView(ctk.CTkFrame):
         self._busy = False
         self._confirm_answers = queue.Queue()
         self._status_checked = False
+        self._last_status = (True, "Auto-Hybrid AI Ready (Local + Online Knowledge)")
         self._wrappable_labels = []
         self._wrap_width = 520
-        self.render()
+        self._build_ui()
 
     def render(self):
+        """Called when switching back to the AI Agent tab.
+        Preserves active chat history and ongoing worker state instead of destroying widgets."""
+        if not hasattr(self, "scroll") or not self.scroll.winfo_exists():
+            self._build_ui()
+            return
+        self._set_busy(self._busy)
+        if AGENT_AVAILABLE:
+            ok, detail = self._last_status
+            try:
+                self.status_lbl.configure(
+                    text=("● " + detail[:60]),
+                    text_color=COLORS["success"] if ok else COLORS["warning"]
+                )
+            except Exception:
+                pass
+            self._check_provider_status_async()
+
+    def _build_ui(self):
         for w in self.winfo_children(): w.destroy()
         self._wrappable_labels = []
 
@@ -77,7 +96,7 @@ class ChatView(ctk.CTkFrame):
         title_col.pack(side="left")
         ctk.CTkLabel(title_col, text="🤖 Focus Agent V2 Console", font=FONTS["title"],
                      text_color=COLORS["text"]).pack(anchor="w")
-        ctk.CTkLabel(title_col, text="Autonomous tool execution · verified writes · adaptive planning",
+        ctk.CTkLabel(title_col, text="Auto-Hybrid AI (Local + Online Knowledge) · Smart Tasks, Roadmaps & Planning",
                      font=FONTS["small"], text_color=COLORS["text_dim"]).pack(anchor="w")
 
         status_pill = ctk.CTkFrame(
@@ -85,14 +104,17 @@ class ChatView(ctk.CTkFrame):
             border_width=1, border_color=COLORS["border"]
         )
         status_pill.pack(side="right", pady=4)
-        self.status_lbl = ctk.CTkLabel(status_pill, text="● checking provider…",
-                                       font=FONTS["small"], text_color=COLORS["text_dim"])
+        init_ok, init_detail = self._last_status
+        self.status_lbl = ctk.CTkLabel(
+            status_pill,
+            text=("● " + init_detail[:60]) if AGENT_AVAILABLE else "● agent layer unavailable",
+            font=FONTS["small"],
+            text_color=COLORS["success"] if (AGENT_AVAILABLE and init_ok) else COLORS["error"]
+        )
         self.status_lbl.pack(padx=10, pady=5)
-        if not AGENT_AVAILABLE:
-            self.status_lbl.configure(text="● agent layer unavailable", text_color=COLORS["error"])
 
         self.status_dot = None
-        if not self._status_checked and AGENT_AVAILABLE:
+        if AGENT_AVAILABLE:
             self._check_provider_status_async()
 
         # Quick Prompt Chips (1-click Agent workflows from spec)
@@ -101,7 +123,7 @@ class ChatView(ctk.CTkFrame):
         quick_prompts = [
             ("🗓 Plan my day", "Plan my day"),
             ("🎯 Prioritize tasks", "What should I prioritize?"),
-            ("📊 7-Day Analytics", "Analyze my productivity over the last seven days."),
+            ("🌐 Networking Roadmap", "ami networking shikte cai amk a full millstone soho banay dao"),
             ("🚀 Python Roadmap", "I want to learn Python in two months. Create a roadmap."),
         ]
         for label, prompt_txt in quick_prompts:
@@ -129,7 +151,7 @@ class ChatView(ctk.CTkFrame):
 
         self.entry = ctk.CTkEntry(
             input_frame,
-            placeholder_text="Ask or instruct: e.g. 'I have a Data Communication assignment due next Thursday, 3 hours, hard'",
+            placeholder_text="Write in Bangla, Banglish, or English: e.g. 'ami networking shikte cai full milestone dao' or 'Tomorrow math assignment at 8pm'",
             font=FONTS["body"], fg_color="transparent", border_width=0
         )
         self.entry.pack(side="left", fill="both", expand=True, padx=(16, 8), pady=8)
@@ -147,13 +169,16 @@ class ChatView(ctk.CTkFrame):
 
         if not self.history:
             self.add_message("assistant",
-                "Hello! I'm your To Do Agent. I don't just chat - I take real actions:\n"
-                "• \"Tomorrow submit my AI assignment; it will take about two hours\"\n"
-                "• \"Plan my day\" — get a conflict-free schedule\n"
-                "• \"Move the unfinished database task to my next available slot\"\n"
-                "• \"I want to learn robotics\" — build a goal roadmap\n"
-                "• \"What should I prioritize?\" — transparent reasoning",
+                "👋 **Welcome! I'm your Focus AI Agent.**\n"
+                "You can talk to me in **Bangla, Banglish, or English** — I automatically combine Local AI + Online Knowledge:\n"
+                "• 📝 **Add Tasks:** *\"amar kal math assignment joma dite hobe rat 8 tar modhe\"*\n"
+                "• 🎯 **Create Learning Roadmaps:** *\"ami networking shikte cai amk a full milestone soho banay dao\"*\n"
+                "• 🗓️ **Plan Your Day:** *\"Plan my day\"* or *\"ajker plan koro\"*\n"
+                "• 💡 **Ask Study Questions:** *\"What should I prioritize?\"* or *\"Explain OSI model layers\"*",
                 render_only=True)
+        else:
+            for item in self.history:
+                self.add_message(item.get("role", "assistant"), item.get("content", ""), render_only=True)
 
     # ---------------- provider status ----------------
 
@@ -166,11 +191,13 @@ class ChatView(ctk.CTkFrame):
                 settings = self.app.data.get("settings") or {}
                 primary, online = fllm.get_providers(settings)
                 ok, detail = primary.status()
+            self._last_status = (ok, detail)
             def apply():
                 try:
-                    self.status_lbl.configure(
-                        text=("● " + detail[:60]),
-                        text_color=COLORS["success"] if ok else COLORS["warning"])
+                    if hasattr(self, "status_lbl") and self.status_lbl.winfo_exists():
+                        self.status_lbl.configure(
+                            text=("● " + detail[:60]),
+                            text_color=COLORS["success"] if ok else COLORS["warning"])
                 except Exception:
                     pass
             self.after(0, apply)
@@ -195,15 +222,15 @@ class ChatView(ctk.CTkFrame):
         thinking = self.add_message("assistant", "Thinking… 🧠", is_temporary=True)
 
         def worker():
+            reply = None
+            err = None
             try:
                 reply = self.controller.handle(msg, history=self.history,
                                                confirm_callback=self._confirm_from_ui)
             except Exception as e:
                 reply = None
                 err = f"Agent error: {e.__class__.__name__}: {e}"
-            self.after(0, lambda: self._deliver(reply if reply else None,
-                                                err if not reply else None,
-                                                thinking))
+            self.after(0, lambda: self._deliver(reply, err, thinking))
         threading.Thread(target=worker, daemon=True).start()
 
     def _confirm_from_ui(self, question):
@@ -224,24 +251,24 @@ class ChatView(ctk.CTkFrame):
 
     def _deliver(self, reply, err, thinking_lbl):
         try:
-            thinking_lbl.destroy()
+            if thinking_lbl and thinking_lbl.winfo_exists():
+                thinking_lbl.destroy()
         except Exception:
             pass
-        if err:
-            self.add_message("assistant", f"⚠️ {err}")
-        else:
-            # 1. Agent Reasoning & Tool Trace Card ("Show Agent Thinking")
-            self._add_reasoning_trace(reply)
-            # 2. Honest execution trail
-            for ev in (getattr(reply, "events", None) or []):
-                self._add_event_line(ev)
-            self.add_message("assistant", reply.message)
-            for tr in reply.tool_results:
-                self._add_tool_chip(tr)
-            if reply.plan:
-                self._add_plan_chip(reply.plan)
-            self._refresh_after_action(reply)
-        self._set_busy(False)
+        try:
+            if err:
+                self.add_message("assistant", f"⚠️ {err}")
+            elif reply is not None:
+                # 1. Friendly main reply bubble first
+                self.add_message("assistant", reply.message)
+                # 2. Compact, easy-to-read Agent Action & Trace summary pill
+                self._add_reasoning_trace(reply)
+                # 3. Proposed schedule card (if plan_day / reschedule)
+                if reply.plan:
+                    self._add_plan_chip(reply.plan)
+                self._refresh_after_action(reply)
+        finally:
+            self._set_busy(False)
 
     def _add_reasoning_trace(self, reply):
         """Render a structured 'Agent Thinking & Trace' card for transparency."""
@@ -319,8 +346,12 @@ class ChatView(ctk.CTkFrame):
 
     def _set_busy(self, busy):
         self._busy = busy
-        self.send_btn.configure(state="disabled" if busy else "normal",
-                                text="Thinking…" if busy else "Send 🚀")
+        try:
+            if hasattr(self, "send_btn") and self.send_btn.winfo_exists():
+                self.send_btn.configure(state="disabled" if busy else "normal",
+                                        text="Thinking…" if busy else "Send ✦")
+        except Exception:
+            pass
 
     # ---------------- message rendering ----------------
 

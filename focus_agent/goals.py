@@ -195,13 +195,136 @@ def goal_progress(data, goal):
     }
 
 
-def generate_roadmap_draft(goal_title, weeks=6, hours_per_week=8, start_date=None,
-                           assumptions=None):
-    """Build an EDITABLE roadmap draft from user inputs - clearly labeled.
+DOMAIN_ROADMAPS = {
+    "networking": [
+        ("1. Network Fundamentals, OSI & TCP/IP 5-Layer Model", 0.16),
+        ("2. IPv4/IPv6 Addressing, Subnetting, CIDR & VLSM Practice", 0.18),
+        ("3. Data Link Layer, Ethernet Switching, VLANs & STP", 0.16),
+        ("4. Routing Protocols (Static Routing, OSPF, BGP) & Packet Tracer Labs", 0.18),
+        ("5. Transport Layer (TCP/UDP, 3-Way Handshake, Ports) & Wireshark Lab", 0.16),
+        ("6. Application Layer (DNS, HTTP/S, DHCP, SSH), Firewalls & Socket Mini-Project", 0.16),
+    ],
+    "python": [
+        ("1. Python Syntax, Variables, Data Types, Conditionals & Loops", 0.18),
+        ("2. Functions, Modules, Lists, Dictionaries, Sets & File I/O", 0.20),
+        ("3. Object-Oriented Programming (Classes, Inheritance) & Exceptions", 0.20),
+        ("4. Virtual Environments, External Packages, REST APIs & Pytest", 0.20),
+        ("5. Capstone Project — Build & Package a Complete Python App", 0.22),
+    ],
+    "database": [
+        ("1. Relational Model, ER Diagrams & Database Schema Design", 0.18),
+        ("2. Core SQL — SELECT, JOINs, Group By, Aggregations & Subqueries", 0.22),
+        ("3. Database Normalization (1NF, 2NF, 3NF, BCNF) & Indexing", 0.20),
+        ("4. Transactions, ACID Properties, Concurrency & Query Optimization", 0.20),
+        ("5. Capstone Project — Full Database Application with Stored Procedures", 0.20),
+    ],
+    "machine_learning": [
+        ("1. Python Data Stack (NumPy, Pandas, Matplotlib) & Math Foundations", 0.18),
+        ("2. Supervised Learning — Linear/Logistic Regression & Decision Trees", 0.22),
+        ("3. Model Evaluation, Feature Engineering, Random Forest & XGBoost", 0.20),
+        ("4. Unsupervised Learning (K-Means, PCA) & Neural Network Basics", 0.20),
+        ("5. End-to-End ML Project — Data Pipeline, Training & Model Deployment", 0.20),
+    ],
+    "dsa": [
+        ("1. Time/Space Complexity (Big-O), Arrays, Strings & Two Pointers", 0.18),
+        ("2. Hash Maps, Linked Lists, Stacks, Queues & Recursion", 0.20),
+        ("3. Binary Trees, Binary Search Trees (BST), Heaps & Priority Queues", 0.20),
+        ("4. Graphs (BFS, DFS, Shortest Path, Topological Sort) & Greedy", 0.20),
+        ("5. Dynamic Programming (1D/2D DP) & Timed Problem-Solving Practice", 0.22),
+    ],
+    "web": [
+        ("1. Semantic HTML5, Modern CSS3, Flexbox, Grid & Responsive UI", 0.18),
+        ("2. JavaScript ES6+, DOM Manipulation, Async/Await & Fetch API", 0.22),
+        ("3. Frontend Framework (React Components, State, Hooks & Routing)", 0.22),
+        ("4. Backend REST APIs, Authentication & Database Integration", 0.20),
+        ("5. Full-Stack Portfolio Project & Live Cloud Deployment", 0.18),
+    ],
+    "os": [
+        ("1. OS Kernel Concepts, Processes, Threads, System Calls & Linux CLI", 0.20),
+        ("2. CPU Scheduling Algorithms (FCFS, SJF, Round Robin, Priority)", 0.20),
+        ("3. Process Synchronization, Mutexes, Semaphores & Deadlocks", 0.20),
+        ("4. Memory Management, Paging, Segmentation & Virtual Memory", 0.20),
+        ("5. File Systems, Disk Scheduling & Custom Shell Mini-Project", 0.20),
+    ],
+    "security": [
+        ("1. Linux & Networking Fundamentals for Security, Bash & Permissions", 0.20),
+        ("2. Cryptography Basics, Hashing, TLS/HTTPS & Authentication", 0.20),
+        ("3. Web Application Security & OWASP Top 10 (SQLi, XSS, CSRF Labs)", 0.22),
+        ("4. Network Reconnaissance, Nmap, Wireshark & Vulnerability Scanning", 0.18),
+        ("5. System Hardening, Firewalls, Log Analysis & Beginner CTF Practice", 0.20),
+    ],
+    "robotics": [
+        ("1. Electronics Basics, Microcontrollers (Arduino/ESP32) & Sensors", 0.20),
+        ("2. Motor Drivers, PWM, Actuators & Embedded C/Python Programming", 0.20),
+        ("3. Robot Kinematics, Odometry & PID Control Loops", 0.20),
+        ("4. ROS (Robot Operating System) Nodes, Topics & Simulation", 0.20),
+        ("5. Autonomous Obstacle-Avoiding / Line-Following Robot Project", 0.20),
+    ],
+}
 
-    This is a planning aid based on the user's stated time budget; every
-    assumption is returned for display, never written as fact.
-    """
+
+def _match_domain_phases(goal_title: str):
+    low = (goal_title or "").lower()
+    if any(k in low for k in ("network", "networking", "ccna", "data comm", "tcp", "osi", "subnet")):
+        return DOMAIN_ROADMAPS["networking"]
+    if any(k in low for k in ("machine learning", "deep learning", "artificial intelligence", "ml", "neural", "data science")):
+        return DOMAIN_ROADMAPS["machine_learning"]
+    if any(k in low for k in ("database", "dbms", "sql", "postgres", "mysql", "mongodb")):
+        return DOMAIN_ROADMAPS["database"]
+    if any(k in low for k in ("dsa", "data structure", "algorithm", "leetcode", "competitive programming")):
+        return DOMAIN_ROADMAPS["dsa"]
+    if any(k in low for k in ("web", "react", "frontend", "fullstack", "full stack", "javascript", "html", "nextjs", "node")):
+        return DOMAIN_ROADMAPS["web"]
+    if any(k in low for k in ("operating system", "linux", "kernel")):
+        return DOMAIN_ROADMAPS["os"]
+    if any(k in low for k in ("cyber", "security", "hacking", "pentest", "ctf")):
+        return DOMAIN_ROADMAPS["security"]
+    if any(k in low for k in ("robot", "robotics", "arduino", "ros", "iot")):
+        return DOMAIN_ROADMAPS["robotics"]
+    if "python" in low:
+        return DOMAIN_ROADMAPS["python"]
+    return None
+
+
+def _llm_or_topic_phases(goal_title: str, provider=None):
+    """Try generating 5 topic-specific milestones via LLM (+ online summary if available)."""
+    clean_topic = (goal_title or "the subject").strip()
+    if provider is not None and getattr(provider, "name", "none") not in ("none", "offline"):
+        try:
+            from focus_agent.llm import fetch_online_topic_summary
+            web_ctx = fetch_online_topic_summary(clean_topic)
+            ctx_line = f"\nOnline reference context: {web_ctx}" if web_ctx else ""
+            res = provider.chat_json(
+                system=(
+                    "You are an academic curriculum designer. Return ONLY a JSON object "
+                    '{"milestones": ["1. ...", "2. ...", "3. ...", "4. ...", "5. ..."]} '
+                    "with 5 concrete, progressive, topic-specific learning milestones."
+                ),
+                user=f"Create a 5-step study roadmap for: {clean_topic}.{ctx_line}",
+                temperature=0.0,
+                max_tokens=600,
+            )
+            ms_list = res.get("milestones") if isinstance(res, dict) else None
+            if isinstance(ms_list, list) and len(ms_list) >= 4:
+                valid_ms = [str(x).strip() for x in ms_list[:6] if str(x).strip()]
+                if len(valid_ms) >= 4:
+                    share = round(1.0 / len(valid_ms), 2)
+                    return [(m_title, share) for m_title in valid_ms]
+        except Exception:
+            pass
+
+    return [
+        (f"1. Core Concepts & Foundations of {clean_topic}", 0.20),
+        (f"2. Essential Tools, Syntax & Hands-On Exercises in {clean_topic}", 0.20),
+        (f"3. Intermediate Techniques & Problem Solving in {clean_topic}", 0.20),
+        (f"4. Applied Mini-Project & Practical Implementation ({clean_topic})", 0.20),
+        (f"5. Advanced Topics, Review & Capstone Project ({clean_topic})", 0.20),
+    ]
+
+
+def generate_roadmap_draft(goal_title, weeks=6, hours_per_week=8, start_date=None,
+                           assumptions=None, provider=None):
+    """Build an EDITABLE, topic-specific roadmap draft with concrete milestones."""
     try:
         weeks = max(2, min(int(weeks), 26))
         hours_per_week = max(1, min(int(hours_per_week), 40))
@@ -215,26 +338,21 @@ def generate_roadmap_draft(goal_title, weeks=6, hours_per_week=8, start_date=Non
 
     from datetime import timedelta
     total_hours = weeks * hours_per_week
-    phases = [
-        ("Foundations & setup", 0.25),
-        ("Guided practice & small exercises", 0.30),
-        ("Build a small project", 0.25),
-        ("Review, gaps & polish", 0.20),
-    ]
+    phases = _match_domain_phases(goal_title) or _llm_or_topic_phases(goal_title, provider=provider)
     milestones = []
     for i, (phase, share) in enumerate(phases):
-        end = d0 + timedelta(weeks=int(round((i + 1) * weeks / len(phases))))
+        end = d0 + timedelta(days=max(3, int(round((i + 1) * (weeks * 7) / len(phases)))))
+        hrs = max(2, int(round(total_hours * share)))
         milestones.append({
-            "title": f"{phase} (~{int(round(total_hours * share))}h)",
+            "title": f"{phase} (~{hrs}h)",
             "target_date": end.isoformat(),
-            "estimated_minutes": int(round(total_hours * share * 60)),
+            "estimated_minutes": hrs * 60,
         })
     return {
         "goal_title": goal_title,
         "milestones": milestones,
         "assumptions": assumptions or [
-            f"{weeks}-week horizon at about {hours_per_week}h/week "
-            f"(~{total_hours}h total) starting {start}",
-            "Phases are generic until you add specifics - edit any milestone",
+            f"{weeks}-week study plan at ~{hours_per_week}h/week (~{total_hours}h total) starting {start}",
+            "All milestones are saved in your Goals & Roadmaps tab — you can check them off or convert any milestone into a daily task.",
         ],
     }, None

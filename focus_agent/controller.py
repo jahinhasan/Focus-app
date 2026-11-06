@@ -316,6 +316,8 @@ class AgentController:
         primary, online = get_providers(settings)
         if provider is not None:
             primary = provider
+        self._active_provider = primary
+        self._active_online = online
         self._remember_turn("user", text)
 
         # 0. parked clarification resume
@@ -627,19 +629,62 @@ class AgentController:
     # ---------------- step planning: goals ----------------
 
     def _plan_goal(self, text, extraction, now):
-        goal_info = extraction.goal or {}
-        title = goal_info.get("title") or (extraction.tasks[0].title if extraction.tasks else None)
+        goal_info = dict(extraction.goal or {})
+        raw_title = goal_info.get("title") or (extraction.tasks[0].title if extraction.tasks else None)
+        cleaned = fextract.clean_goal_title(text)
+        if not raw_title:
+            title = cleaned
+        else:
+            low_raw = raw_title.lower()
+            if any(w in low_raw for w in ("shikte", "sikhte", "shokte", "millstone", "mailstone",
+                                          "milestone", "banay", "dao", "want to", "amk")):
+                title = cleaned
+            elif raw_title.islower():
+                title = raw_title.title()
+            else:
+                title = raw_title
         if not title:
             return [Step("ask", args={
                 "question": "What's the goal? e.g. 'I want to learn AI/ML by December'.",
                 "intent": "goal",
                 "draft": {"need": "goal_title"},
             })]
+        goal_info["title"] = title
+        extraction.goal = goal_info
+
+        weeks = 8
+        if goal_info.get("target_date"):
+            try:
+                from datetime import date as _d
+                delta = (_d.fromisoformat(goal_info["target_date"]) - now.date()).days
+                weeks = max(2, min(26, delta // 7 or 2))
+            except (ValueError, TypeError):
+                pass
+        prov = getattr(self, "_active_provider", None)
+        if getattr(prov, "name", "") not in ("ollama", "online"):
+            prov = None
+        draft, _ = fgoals.generate_roadmap_draft(
+            title, weeks=weeks, hours_per_week=8,
+            start_date=now.date().isoformat(), provider=prov
+        )
+        self._last_goal_draft = draft
+        ms_titles = [m["title"] for m in (draft.get("milestones") if draft else [])]
+
+        # If an older empty goal with the same title exists (0 milestones), remove it first
+        existing = [
+            g for g in self.data.get("goals", [])
+            if (g.get("title") or "").strip().lower() == title.strip().lower()
+            and not g.get("milestones")
+        ]
+        for eg in existing:
+            self.data["goals"].remove(eg)
+
         return [Step("tool", "create_goal",
                      {"title": title,
                       "description": goal_info.get("description"),
-                      "target_date": goal_info.get("target_date")},
-                     note=f"Creating goal '{title}'...",
+                      "target_date": goal_info.get("target_date"),
+                      "milestones": ms_titles},
+                     note=f"Creating goal '{title}' with {len(ms_titles)} milestones...",
                      verify={})]
 
     # ---------------- compose replies from outcomes ----------------
@@ -686,31 +731,70 @@ class AgentController:
                           events=[e.to_dict() for e in outcome.events])
 
     def _goal_roadmap_addendum(self, extraction, outcome, msg, now):
-        """Attach the editable roadmap draft (labeled assumptions) on success."""
+        """Persist target dates/hours on the created goal's milestones and return a clear, friendly summary."""
         if not any(r.ok for r in outcome.tool_results if r.tool == "create_goal"):
             return msg
         goal_info = extraction.goal or {}
         title = goal_info.get("title") or (extraction.tasks[0].title if extraction.tasks else "")
-        weeks = 8
-        if goal_info.get("target_date"):
-            try:
-                from datetime import date as _d
-                delta = (_d.fromisoformat(goal_info["target_date"]) - now.date()).days
-                weeks = max(2, min(26, delta // 7 or 2))
-            except (ValueError, TypeError):
-                pass
-        draft, err = fgoals.generate_roadmap_draft(title, weeks=weeks, hours_per_week=8)
-        if draft:
-            created = next((r for r in outcome.tool_results
-                            if r.tool == "create_goal" and r.ok), None)
-            goal_id = (created.data or {}).get("goal_id") if created else None
-            msg += ("\n\n**Draft roadmap** (assumptions: " + "; ".join(draft["assumptions"]) + "):\n"
-                    + "\n".join(f"• {mm['title']} → by {mm['target_date']}"
-                                for mm in draft["milestones"])
-                    + "\nEdit milestones in the Goals tab - nothing is set in stone.")
-            if goal_id:
-                msg += f"\n(goal id {goal_id})"
-        return msg
+        draft = getattr(self, "_last_goal_draft", None)
+        if not draft:
+            weeks = 8
+            if goal_info.get("target_date"):
+                try:
+                    from datetime import date as _d
+                    delta = (_d.fromisoformat(goal_info["target_date"]) - now.date()).days
+                    weeks = max(2, min(26, delta // 7 or 2))
+                except (ValueError, TypeError):
+                    pass
+            draft, _ = fgoals.generate_roadmap_draft(
+                title, weeks=weeks, hours_per_week=8, start_date=now.date().isoformat()
+            )
+        if not draft:
+            return msg
+
+        created = next((r for r in outcome.tool_results
+                        if r.tool == "create_goal" and r.ok), None)
+        goal_id = (created.data or {}).get("goal_id") if created else None
+        if goal_id:
+            goal_obj = fgoals.get_goal(self.data, goal_id)
+            if goal_obj:
+                if not goal_obj.get("milestones"):
+                    for mm in draft["milestones"]:
+                        goal_obj["milestones"].append(fgoals._new_milestone(
+                            mm["title"], mm.get("target_date"), mm.get("estimated_minutes")
+                        ))
+                else:
+                    for ms_obj, mm in zip(goal_obj["milestones"], draft["milestones"]):
+                        ms_obj["target_date"] = mm.get("target_date")
+                        ms_obj["estimated_minutes"] = mm.get("estimated_minutes")
+                if not goal_obj.get("target_date") and draft["milestones"]:
+                    goal_obj["target_date"] = draft["milestones"][-1].get("target_date")
+                from logic import save_data
+                save_data(self.data)
+                if created:
+                    created.message = (
+                        f"Created goal '{goal_obj['title']}' with "
+                        f"{len(goal_obj['milestones'])} milestone(s)"
+                    )
+
+        ms_lines = []
+        for idx, mm in enumerate(draft["milestones"], start=1):
+            m_title = mm["title"]
+            # Avoid double numbering like "1. 1. ..."
+            if not _re.match(r"^\d+[\.\)]\s*", m_title):
+                m_title = f"{idx}. {m_title}"
+            hrs = round((mm.get("estimated_minutes") or 360) / 60, 1)
+            hrs_txt = f"{int(hrs)}h" if hrs == int(hrs) else f"{hrs}h"
+            ms_lines.append(f"• **{m_title}**  _(📅 Target: {mm['target_date']} · ~{hrs_txt} study)_")
+
+        friendly = (
+            f"🎯 **Goal & Roadmap Created: {title}**\n"
+            f"I have created your goal with **{len(draft['milestones'])} step-by-step milestones** "
+            f"and saved everything to your **Goals & Roadmaps** tab:\n\n"
+            + "\n".join(ms_lines)
+            + "\n\n💡 _Tip: Open the **🎯 Goals & Roadmaps** tab from the sidebar anytime to track your progress and check off each milestone as you finish it!_"
+        )
+        return friendly
 
     # ---------------- planning (read-only proposal) ----------------
 
@@ -788,33 +872,50 @@ class AgentController:
     # ---------------- query / chat via LLM ----------------
 
     def _route_chat(self, text, extraction, now, primary, online, history):
-        # research-shaped questions may use the online provider - with disclosure
+        # Autonomous Hybrid Router: automatically combines online knowledge / cloud LLM
+        # and local AI without requiring manual user switching.
         low = text.lower()
-        wants_research = any(h in low for h in RESEARCH_HINTS)
+        wants_research = any(h in low for h in RESEARCH_HINTS) or any(
+            k in low for k in ("explain", "what is", "how to", "how does", "ki", "kivabe",
+                               "keno", "learn", "study", "roadmap", "syllabus", "guide")
+        )
         use_provider = None
         disclosure = ""
+        online_context = ""
+
         if wants_research and online is not None:
             use_provider = online
-            disclosure = "🌐 _This answer used your configured online provider._\n\n"
-        elif wants_research and online is None:
-            disclosure = ("_No online research provider is configured, so this is a "
-                          "local answer without web research._\n\n")
+            disclosure = "🌐 _Auto-Routed: Online Cloud AI_\n\n"
+        elif wants_research and getattr(primary, "name", "") in ("ollama", "online"):
+            from focus_agent.llm import fetch_online_topic_summary
+            online_context = fetch_online_topic_summary(text)
+            if online_context:
+                disclosure = "🌐 _Auto-Hybrid AI (Live Online Knowledge + Local AI)_\n\n"
+
         provider = use_provider or primary
         try:
+            sys_prompt = (
+                "You are the Focus Agent assistant for a student. "
+                "Write in clear, warm, friendly language that a non-technical student can easily understand. "
+                "If the user writes in Bangla or Banglish, reply naturally in clear Bangla/Banglish (with English technical terms where helpful). "
+                f"User context: {self._compact_context()}. "
+            )
+            if online_context:
+                sys_prompt += f"\nLive Online Reference Knowledge:\n{online_context}\n"
+            sys_prompt += (
+                "For task/schedule/goal actions, remind them they can also say "
+                "'add task ...', 'plan my day', or 'I want to learn <topic> with milestones'."
+            )
             answer = provider.chat(
-                system=("You are the Focus Dashboard assistant for a student. "
-                        "Be concise, practical and encouraging. "
-                        f"User context: {self._compact_context()}. "
-                        "You cannot change data directly - suggest commands like "
-                        "'add task ...', 'plan my day', 'reschedule'."),
+                system=sys_prompt,
                 user=text, history=history, temperature=0.4, max_tokens=700)
             return AgentReply(disclosure + answer, extraction=extraction)
         except LLMError as e:
-            fallback = (f"I can't reach the AI provider right now ({e}).\n"
-                        "Everything else keeps working - I can still:\n"
-                        "• add tasks from plain text (local parser)\n"
-                        "• plan and reschedule your day\n"
-                        "• answer questions about your stats and routine")
+            fallback = (f"I can't reach the AI model right now ({e}).\n"
+                        "Everything else keeps working — you can still:\n"
+                        "• Add tasks: e.g. 'Tomorrow math assignment due at 8 PM, 2 hours'\n"
+                        "• Create learning roadmaps: e.g. 'I want to learn networking with milestones'\n"
+                        "• Plan your day: say 'Plan my day'")
             return AgentReply(fallback, extraction=extraction, status="provider_offline")
 
     # ---------------- utils ----------------

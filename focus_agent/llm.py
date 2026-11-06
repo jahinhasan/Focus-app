@@ -200,28 +200,88 @@ class OllamaProvider(LLMProvider):
         if not models:
             return False, "Ollama is running but no models are installed. Run: ollama pull <model>"
         if self.model in models or any(m.split(":")[0] == self.model.split(":")[0] for m in models):
-            return True, f"Connected ({self.model} available)"
+            return True, f"Auto-Hybrid AI Ready ({self.model} + Online Knowledge)"
         return False, (f"Ollama is running but '{self.model}' is not installed. "
                        f"Available: {', '.join(models[:6])}. Run: ollama pull {self.model}")
 
     def capabilities(self):
-        return {"local": True, "research": False}
+        return {"local": True, "research": True}
+
+
+def fetch_online_topic_summary(query: str, timeout: float = 2.5) -> str:
+    """Fetch live online encyclopedic knowledge for a topic when internet is available.
+
+    Used automatically by the agent for curriculum roadmaps and study explanations
+    when no paid cloud API key is configured. Returns '' when offline.
+    """
+    q = re.sub(r"[^a-zA-Z0-9\s+#.-]", " ", (query or "")).strip()
+    if not q or len(q) < 2:
+        return ""
+    headers = {"User-Agent": "FocusAgentV2/2.0 (Academic Student Productivity Agent)"}
+    try:
+        search_resp = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={"action": "opensearch", "search": q, "limit": 2, "namespace": 0, "format": "json"},
+            headers=headers,
+            timeout=timeout,
+        )
+        if search_resp.status_code != 200:
+            return ""
+        data = search_resp.json()
+        titles = data[1] if isinstance(data, list) and len(data) > 1 else []
+        if not titles:
+            return ""
+        page_title = titles[0].replace(" ", "_")
+        sum_resp = requests.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_title}",
+            headers=headers,
+            timeout=timeout,
+        )
+        if sum_resp.status_code == 200:
+            extract = (sum_resp.json() or {}).get("extract") or ""
+            return extract[:900].strip()
+    except Exception:
+        return ""
+    return ""
 
 
 class OnlineProvider(LLMProvider):
     """Optional OpenAI-compatible online adapter for research-heavy requests.
 
-    Requires ONLINE_LLM_API_KEY (and optionally ONLINE_LLM_BASE_URL,
-    ONLINE_LLM_MODEL) from the environment. Never accepts keys in data files.
+    Automatically detects ONLINE_LLM_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or
+    GEMINI_API_KEY from the environment so the user never has to configure
+    provider routing manually.
     """
 
     name = "online"
 
     def __init__(self, model=None, base_url=None, api_key=None, timeout=60):
-        self.api_key = api_key or os.environ.get("ONLINE_LLM_API_KEY")
-        self.base_url = (base_url or os.environ.get("ONLINE_LLM_BASE_URL")
-                         or "https://api.openai.com/v1").rstrip("/")
-        self.model = model or os.environ.get("ONLINE_LLM_MODEL") or "gpt-4o-mini"
+        env_online = os.environ.get("ONLINE_LLM_API_KEY")
+        env_groq = os.environ.get("GROQ_API_KEY")
+        env_openai = os.environ.get("OPENAI_API_KEY")
+        env_gemini = os.environ.get("GEMINI_API_KEY")
+
+        if api_key or env_online:
+            self.api_key = api_key or env_online
+            self.base_url = (base_url or os.environ.get("ONLINE_LLM_BASE_URL")
+                             or "https://api.openai.com/v1").rstrip("/")
+            self.model = model or os.environ.get("ONLINE_LLM_MODEL") or "gpt-4o-mini"
+        elif env_groq:
+            self.api_key = env_groq
+            self.base_url = "https://api.groq.com/openai/v1"
+            self.model = model or "llama-3.3-70b-versatile"
+        elif env_gemini:
+            self.api_key = env_gemini
+            self.base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            self.model = model or "gemini-2.0-flash"
+        elif env_openai:
+            self.api_key = env_openai
+            self.base_url = "https://api.openai.com/v1"
+            self.model = model or "gpt-4o-mini"
+        else:
+            self.api_key = None
+            self.base_url = (base_url or "https://api.openai.com/v1").rstrip("/")
+            self.model = model or "gpt-4o-mini"
         self.timeout = int(timeout)
 
     def available(self):

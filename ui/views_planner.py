@@ -53,6 +53,9 @@ class PlannerView(ctk.CTkFrame):
         super().__init__(parent, fg_color=COLORS["bg"])
         self.app = app
         self.current_plan = None
+        self.current_priorities = None
+        self.current_date_str = None
+        self._busy_generating = False
         self.render()
 
     def render(self):
@@ -74,7 +77,7 @@ class PlannerView(ctk.CTkFrame):
         iso_today = fdates.today_str(settings)
         ctk.CTkLabel(controls, text="Date (YYYY-MM-DD):", font=FONTS["body"]).pack(side="left")
         self.date_entry = ctk.CTkEntry(controls, width=120)
-        self.date_entry.insert(0, iso_today)
+        self.date_entry.insert(0, self.current_date_str or iso_today)
         self.date_entry.pack(side="left", padx=8)
 
         ctk.CTkButton(controls, text="Today", width=70, fg_color=COLORS["card"],
@@ -94,12 +97,19 @@ class PlannerView(ctk.CTkFrame):
         self.body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.body.pack(fill="both", expand=True, padx=10, pady=8)
 
-        empty = ctk.CTkFrame(self.body, fg_color=COLORS["card"], corner_radius=15)
-        empty.pack(fill="x", padx=10, pady=30)
-        ctk.CTkLabel(empty, text="Generate a plan to see time slots, reasons and overload warnings.\nPlans respect your classes, study window and learned pace.",
-                     text_color=COLORS["text_dim"], font=FONTS["body"], justify="center").pack(pady=30)
+        if self._busy_generating:
+            self.generate_btn.configure(state="disabled", text="Working…")
+            self._render_plan_placeholder("⏳ Building a feasible plan…")
+        elif self.current_plan is not None:
+            self._render_plan(self.current_plan, self.current_priorities)
+        else:
+            empty = ctk.CTkFrame(self.body, fg_color=COLORS["card"], corner_radius=15)
+            empty.pack(fill="x", padx=10, pady=30)
+            ctk.CTkLabel(empty, text="Generate a plan to see time slots, reasons and overload warnings.\nPlans respect your classes, study window and learned pace.",
+                         text_color=COLORS["text_dim"], font=FONTS["body"], justify="center").pack(pady=30)
 
     def _set_date(self, iso):
+        self.current_date_str = iso
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, iso)
 
@@ -111,29 +121,46 @@ class PlannerView(ctk.CTkFrame):
         if not valid_date(date_str):
             messagebox.showerror("Planner", "Date must be YYYY-MM-DD")
             return
+        self.current_date_str = date_str
+        self._busy_generating = True
         self.generate_btn.configure(state="disabled", text="Working…")
         self._render_plan_placeholder("⏳ Building a feasible plan…")
 
         def worker():
-            plan = fsched.generate_day_plan(self.app.data, date_str,
-                                            settings=self.app.data.get("settings"),
-                                            commit=False)
-            priorities = fsched.explain_priorities(self.app.data, date_str,
-                                                   settings=self.app.data.get("settings"))
-            self.after(0, lambda: self._render_plan(plan, priorities))
+            try:
+                plan = fsched.generate_day_plan(self.app.data, date_str,
+                                                settings=self.app.data.get("settings"),
+                                                commit=False)
+                priorities = fsched.explain_priorities(self.app.data, date_str,
+                                                       settings=self.app.data.get("settings"))
+                self.after(0, lambda: self._render_plan(plan, priorities))
+            except Exception as err:
+                def on_err():
+                    self._busy_generating = False
+                    if hasattr(self, "generate_btn") and self.generate_btn.winfo_exists():
+                        self.generate_btn.configure(state="normal", text="⚙ Generate Plan")
+                    self._render_plan_placeholder(f"⚠️ Could not build plan: {err}")
+                self.after(0, on_err)
         threading.Thread(target=worker, daemon=True).start()
 
     def _busy_plan(self):
-        return str(self.generate_btn.cget("state")) == "disabled"
+        return bool(self._busy_generating)
 
     def _render_plan_placeholder(self, text):
+        if not hasattr(self, "body") or not self.body.winfo_exists():
+            return
         for w in self.body.winfo_children(): w.destroy()
         ctk.CTkLabel(self.body, text=text, font=FONTS["header"],
                      text_color=COLORS["text_dim"]).pack(pady=40)
 
     def _render_plan(self, plan, priorities):
-        self.generate_btn.configure(state="normal", text="⚙ Generate Plan")
+        self._busy_generating = False
         self.current_plan = plan
+        self.current_priorities = priorities
+        if hasattr(self, "generate_btn") and self.generate_btn.winfo_exists():
+            self.generate_btn.configure(state="normal", text="⚙ Generate Plan")
+        if not hasattr(self, "body") or not self.body.winfo_exists():
+            return
         for w in self.body.winfo_children(): w.destroy()
 
         if not plan.slots and not plan.unscheduled:
