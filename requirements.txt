@@ -13,10 +13,10 @@ python-dotenv>=1.0.0
 # Development / evaluation
 pytest>=8.0
 
-# ---- Optional: legacy V1 cloud routine/vault import (ai_parser.py) ----
-# The V2 agent runs fully locally on Ollama and never needs these.
-# Install explicitly if you use routine photo import with cloud parsers:
-#   pip install -r requirements.txt && pip install groq openai google-genai
+# ---- Optional: cloud routine/vault OCR & summary providers (focus_agent/media_import.py) ----
+# The V2 agent runs fully locally on Ollama (or deterministic fallback) and never requires these.
+# Install explicitly only if you use cloud OCR/PDF summary providers:
+#   pip install groq openai google-genai
 # groq>=0.4.2
 # openai>=1.12.0
 # google-genai
