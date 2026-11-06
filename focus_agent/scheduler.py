@@ -268,6 +268,10 @@ def generate_day_plan(data, date_str, settings=None, now=None,
     # never place NEW slots in the past for today's plan
     if is_today and now_min >= 0:
         free = _subtract(free, 0, now_min)
+        # If the user opens the planner late at night (after study window end, before 23:35),
+        # provide a late-evening study block up to 23:59 so late-night study still works.
+        if not free and now_min <= 23 * 60 + 35:
+            free = [{"start": now_min, "end": 23 * 60 + 59}]
 
     candidates = _eligible_tasks(data, date_str, settings)
     slots, unscheduled = [], []

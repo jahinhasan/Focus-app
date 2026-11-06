@@ -165,3 +165,211 @@ def suggest_subtasks_ai(task_title: str) -> list:
         f"Review, verify, and finalize {clean}",
     ]
 
+
+def import_syllabus_pdf(file_path: str, data: dict) -> dict:
+    """Read a syllabus/assignment PDF, DOCX, or TXT file and automatically create
+    a Goal with Milestones + Day-Wise Dashboard Tasks."""
+    import os
+    from datetime import datetime, timedelta
+    from logic import add_task_logic, save_data
+    from focus_agent import goals as fgoals
+
+    base_name = os.path.splitext(os.path.basename(file_path))[0]
+    clean_base = re.sub(r"[_\-]+", " ", base_name).strip().title() or "Course Syllabus"
+
+    raw_text = ""
+    try:
+        from file_parser import FileParser
+        raw_text = FileParser().extract_text(file_path) or ""
+    except Exception:
+        raw_text = ""
+
+    goal_title = f"Master {clean_base}"
+    milestones = []
+
+    if raw_text.strip():
+        try:
+            primary, _ = get_providers(data.get("settings"))
+            if primary.name != "none":
+                sys_prompt = (
+                    "You are an academic syllabus analyzer. Read the syllabus/assignment text "
+                    "and output ONLY a JSON object with: "
+                    "{\"goal_title\": \"Course/Topic Name\", \"milestones\": [\"1. Topic...\", \"2. Topic...\", ...]} "
+                    "containing 5 to 6 sequential study modules."
+                )
+                res = primary.chat_json(sys_prompt, raw_text[:6000], temperature=0.1, max_tokens=800)
+                if isinstance(res, dict):
+                    if res.get("goal_title"):
+                        goal_title = str(res["goal_title"]).strip()[:160]
+                    ms_raw = res.get("milestones")
+                    if isinstance(ms_raw, list) and len(ms_raw) >= 3:
+                        milestones = [str(m).strip()[:180] for m in ms_raw[:6] if str(m).strip()]
+        except Exception:
+            pass
+
+        if not milestones:
+            # Deterministic heading/bullet extractor from syllabus text
+            lines = [
+                ln.strip(" •-*#\t")
+                for ln in raw_text.splitlines()
+                if 12 <= len(ln.strip()) <= 140
+            ]
+            picked = []
+            for ln in lines:
+                if re.search(r"\b(week|module|unit|chapter|lecture|part|topic|lab|assignment)\b", ln.lower()) or len(picked) < 6:
+                    if ln not in picked:
+                        picked.append(ln)
+                if len(picked) >= 6:
+                    break
+            if len(picked) >= 3:
+                milestones = [f"{i}. {p}" for i, p in enumerate(picked[:6], start=1)]
+
+    if not milestones:
+        draft, _ = fgoals.generate_roadmap_draft(clean_base, weeks=6, hours_per_week=8)
+        if draft and draft.get("milestones"):
+            milestones = [m["title"] for m in draft["milestones"][:6]]
+
+    now_date = datetime.now().date()
+    ms_dicts = []
+    for idx, m_title in enumerate(milestones, start=1):
+        t_date = (now_date + timedelta(days=idx * 7)).isoformat()
+        ms_dicts.append({"title": m_title, "target_date": t_date, "estimated_minutes": 360})
+
+    goal, err = fgoals.add_goal(
+        data,
+        title=goal_title,
+        description=f"Imported from {os.path.basename(file_path)}",
+        target_date=ms_dicts[-1]["target_date"] if ms_dicts else None,
+        subject=clean_base,
+        milestones=ms_dicts,
+    )
+    if err or not goal:
+        return {"ok": False, "message": f"Could not create syllabus roadmap: {err}"}
+
+    existing_titles = {(t.get("title") or "").lower() for t in data.get("tasks", [])}
+    day_lines = []
+    for idx, m_title in enumerate(milestones, start=1):
+        day_date = (now_date + timedelta(days=idx - 1)).isoformat()
+        clean_ms = re.sub(r"^\d+[\.\)]\s*", "", m_title).strip()
+        task_title = f"Day {idx} ({clean_base}): {clean_ms}"
+        if task_title.lower() not in existing_titles:
+            add_task_logic(
+                data,
+                title=task_title,
+                deadline=day_date,
+                duration=60,
+                subject=clean_base,
+                importance=2,
+                difficulty=2,
+                goal_id=goal["id"],
+                notes=f"Auto-generated from syllabus file '{os.path.basename(file_path)}'",
+            )
+            existing_titles.add(task_title.lower())
+        day_tag = "Today" if idx == 1 else ("Tomorrow" if idx == 2 else day_date)
+        day_lines.append(f"• **Day {idx} ({day_tag}):** {clean_ms}")
+
+    save_data(data)
+    msg = (
+        f"📄 **Syllabus Roadmap Imported: {goal_title}**\n"
+        f"Created **{len(milestones)} milestones** in **Goals & Roadmaps** and scheduled "
+        f"**Day-Wise Study Sessions** on your **Dashboard**:\n\n"
+        + "\n".join(day_lines)
+    )
+    return {"ok": True, "goal_id": goal["id"], "message": msg}
+
+
+def record_and_transcribe_voice(duration_sec: int = 5) -> tuple[str | None, str | None]:
+    """Record short microphone audio and transcribe via SpeechRecognition (Bangla + English).
+    Returns (text, error_message)."""
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    try:
+        import speech_recognition as sr
+    except ImportError:
+        return None, "SpeechRecognition package is not installed."
+
+    recognizer = sr.Recognizer()
+    wav_path = os.path.join(tempfile.gettempdir(), "focus_agent_voice.wav")
+    recorded = False
+
+    # 1. Try PyAudio Microphone if available
+    try:
+        with sr.Microphone() as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.4)
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=duration_sec)
+            recorded = True
+    except Exception:
+        audio = None
+
+    # 2. Fallback to Linux `arecord` if PyAudio is not installed
+    if not recorded and shutil.which("arecord"):
+        try:
+            proc = subprocess.run(
+                ["arecord", "-f", "S16_LE", "-r", "16000", "-c", "1", "-d", str(duration_sec), wav_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=duration_sec + 3
+            )
+            if proc.returncode == 0 and os.path.exists(wav_path):
+                with sr.AudioFile(wav_path) as source:
+                    audio = recognizer.record(source)
+                    recorded = True
+        except Exception:
+            audio = None
+
+    if not recorded or audio is None:
+        return None, "No active microphone detected (or PyAudio/arecord unavailable)."
+
+    # Transcribe: try English/Banglish first, then Bengali
+    for lang in ("en-IN", "bn-BD", "en-US"):
+        try:
+            txt = recognizer.recognize_google(audio, language=lang)
+            if txt and txt.strip():
+                return txt.strip(), None
+        except sr.UnknownValueError:
+            continue
+        except sr.RequestError as e:
+            return None, f"Speech recognition service unreachable: {e}"
+    return None, "Could not hear clear speech — please try again."
+
+
+def export_plan_to_ics(plan, file_path: str) -> tuple[bool, str]:
+    """Export a PlanResult's time slots into a standard RFC-5545 .ics calendar file."""
+    if not plan or not getattr(plan, "slots", None):
+        return False, "No scheduled slots to export."
+    date_clean = (plan.date or "").replace("-", "")
+    if len(date_clean) != 8:
+        return False, "Invalid plan date."
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Focus Agent V2//Student Productivity Schedule//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    for idx, slot in enumerate(plan.slots, start=1):
+        s_clean = (slot.start or "09:00").replace(":", "") + "00"
+        e_clean = (slot.end or "10:00").replace(":", "") + "00"
+        uid = f"focus-agent-{date_clean}-{idx}@focusagent.local"
+        summary = (slot.title or "Study Block").replace("\n", " ")
+        desc = (slot.reason or "Scheduled by Focus Agent V2").replace("\n", " ")
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTART:{date_clean}T{s_clean}",
+            f"DTEND:{date_clean}T{e_clean}",
+            f"SUMMARY:{summary}",
+            f"DESCRIPTION:{desc}",
+            "END:VEVENT",
+        ])
+    lines.append("END:VCALENDAR")
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\r\n".join(lines) + "\r\n")
+        return True, f"Exported {len(plan.slots)} slot(s) to {file_path}"
+    except Exception as exc:
+        return False, f"Failed to write calendar file: {exc}"
+
+

@@ -111,6 +111,15 @@ class TodayView(ctk.CTkScrollableFrame):
         )
         self.quick_agent_btn.pack(side="right")
 
+        self.quick_voice_btn = ctk.CTkButton(
+            agent_input_row, text="🎤", width=38, height=36,
+            fg_color=COLORS["card"], hover_color=COLORS["card_hover"],
+            text_color=COLORS["accent"], border_width=1, border_color=COLORS["border"],
+            corner_radius=8, font=FONTS["body"],
+            command=self.run_quick_voice
+        )
+        self.quick_voice_btn.pack(side="right", padx=(0, 6))
+
         self.quick_agent_entry = ctk.CTkEntry(
             agent_input_row,
             placeholder_text="Ask AI Agent: e.g. 'Kal math assignment rat 8 tay' or 'Plan my day'",
@@ -176,6 +185,35 @@ class TodayView(ctk.CTkScrollableFrame):
         # Container for dynamic list
         self.list_container = ctk.CTkFrame(self, fg_color="transparent")
         self.list_container.pack(fill="both", expand=True)
+
+    def run_quick_voice(self):
+        """Record 5s of voice in Bangla/English and run it in Quick Agent Command."""
+        self.quick_voice_btn.configure(state="disabled", text="🔴")
+        self.quick_agent_status.configure(
+            text="🎙️ Listening for 5 seconds… Speak in Bangla or English!",
+            text_color=COLORS["accent"]
+        )
+        self.quick_agent_status.pack(anchor="w", padx=14, pady=(0, 4))
+
+        def worker():
+            from focus_agent.media_import import record_and_transcribe_voice
+            txt, err = record_and_transcribe_voice(duration_sec=5)
+            def done():
+                try:
+                    self.quick_voice_btn.configure(state="normal", text="🎤")
+                except Exception:
+                    pass
+                if txt:
+                    self.quick_agent_entry.delete(0, "end")
+                    self.quick_agent_entry.insert(0, txt)
+                    self.run_quick_agent()
+                else:
+                    self.quick_agent_status.configure(
+                        text=f"🎙️ {err or 'Could not capture audio.'}",
+                        text_color=COLORS["warning"]
+                    )
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
 
     def run_quick_agent(self):
         msg = self.quick_agent_entry.get().strip()
@@ -255,11 +293,29 @@ class TodayView(ctk.CTkScrollableFrame):
         tmr_mins = sum(int(t.get("duration") or 60) for t in due_tmr)
         today_mins = sum(int(t.get("duration") or 60) for t in due_today)
 
+        exam_keywords = ("exam", "midterm", "final", "quiz", "viva", "porikkha", "পরীক্ষা")
+        upcoming_exams = [
+            t for t in all_open
+            if t.get("date") and t["date"] >= today_str
+            and any(k in (t.get("title") or "").lower() for k in exam_keywords)
+        ]
+        upcoming_exams.sort(key=lambda x: x["date"])
+
         if overdue:
             headline = f"⚠️ Proactive Alert: {len(overdue)} overdue task(s) need rescheduling"
             detail = (f"'{overdue[0]['title']}' was due {overdue[0]['date']}. "
                       f"Click Auto-Plan to reschedule overdue & today's tasks into free study slots.")
             border_c = COLORS["warning"]
+        elif upcoming_exams:
+            ex = upcoming_exams[0]
+            try:
+                days_left = (datetime.fromisoformat(ex["date"]).date() - datetime.now().date()).days
+            except Exception:
+                days_left = 0
+            when_lbl = "TODAY!" if days_left <= 0 else (f"in {days_left} day(s) ({ex['date']})")
+            headline = f"🎓 Exam Countdown: '{ex['title']}' is {when_lbl}"
+            detail = "Click '⚡ Auto-Plan Today' to lock in dedicated revision blocks before your exam."
+            border_c = COLORS["accent"]
         elif due_tmr and tmr_mins >= 120:
             headline = f"⚡ Deadline Radar: {len(due_tmr)} task(s) due tomorrow ({tmr_mins} min estimated)"
             detail = (f"Next up: '{due_tmr[0]['title']}'"

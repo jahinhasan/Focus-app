@@ -189,8 +189,30 @@ class PlannerView(ctk.CTkFrame):
             messagebox.showinfo("Planner", "Plan applied - task slots saved.")
             if "today" in self.app.views:
                 self.app.views["today"].render()
-        ctk.CTkButton(head, text="✅ Apply to Tasks", width=140, fg_color=COLORS["success"],
-                      hover_color=COLORS["success_dark"], command=apply_plan).pack(side="right")
+
+        def export_ics():
+            default_name = f"focus_schedule_{plan.date}.ics"
+            path = filedialog.asksaveasfilename(
+                title="Export Daily Schedule (.ics Calendar)",
+                defaultextension=".ics",
+                initialfile=default_name,
+                filetypes=[("iCalendar File (.ics)", "*.ics"), ("All files", "*.*")]
+            )
+            if not path:
+                return
+            from focus_agent.media_import import export_plan_to_ics
+            ok, msg = export_plan_to_ics(plan, path)
+            if ok:
+                messagebox.showinfo("Export Calendar", f"✅ {msg}\nYou can import this .ics file into Google Calendar, Outlook, or your phone.")
+            else:
+                messagebox.showerror("Export Calendar", msg)
+
+        ctk.CTkButton(head, text="✅ Apply to Tasks", width=136, fg_color=COLORS["success"],
+                      hover_color=COLORS["success_dark"], command=apply_plan).pack(side="right", padx=(6, 0))
+        ctk.CTkButton(head, text="📅 Export .ics", width=116, fg_color=COLORS["bg_secondary"],
+                      hover_color=COLORS["card_hover"], text_color=COLORS["accent"],
+                      border_width=1, border_color=COLORS["border"],
+                      command=export_ics).pack(side="right")
 
         self._wrappable = []
         wrap_w = max(280, int(self.winfo_width() - 120)) if self.winfo_width() > 200 else 520

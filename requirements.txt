@@ -9,6 +9,7 @@ pypdf>=3.17.4
 python-docx>=1.1.0
 pytesseract>=0.3.10
 python-dotenv>=1.0.0
+SpeechRecognition>=3.10.0
 
 # Development / evaluation
 pytest>=8.0

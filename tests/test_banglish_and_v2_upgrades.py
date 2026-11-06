@@ -272,3 +272,67 @@ def test_evaluate_benchmark_summary_safe():
     assert summary["passed"] == summary["total"]
     assert summary["pct"] == 100.0
 
+
+def test_banglish_goal_with_milestones_and_day_wise_dashboard_tasks(data_env):
+    """When user says 'ami networking shikte cai amk a full millstone soho banay dao ki ki shokte hobe',
+    the agent creates a Learn Networking goal with 6 concrete milestones AND schedules Day 1..Day 6
+    tasks directly onto the Dashboard without overloading today's planner."""
+    from focus_agent import scheduler as fsched
+    data = _rich_student_data()
+    ctrl = AgentController(data)
+    day_now = datetime(2026, 11, 5, 14, 0)
+    reply = ctrl.handle(
+        "ami networking shikte cai amk a full millstone soho banay dao ki ki shokte hobe",
+        provider=OfflineProvider(),
+        now=day_now,
+    )
+    assert reply.status in ("ok", "provider_offline")
+    assert len(data["goals"]) == 1
+    g = data["goals"][0]
+    assert "networking" in g["title"].lower()
+    assert len(g["milestones"]) >= 5
+    # Verify Day-Wise tasks were created in data["tasks"]
+    day_tasks = [t for t in data["tasks"] if t.get("goal_id") == g["id"]]
+    assert len(day_tasks) == len(g["milestones"])
+    assert day_tasks[0]["date"] == "2026-11-05"
+    assert day_tasks[1]["date"] == "2026-11-06"
+    # Verify planner for today only schedules Day 1 and does not mark Day 2..6 as overloaded
+    plan = fsched.generate_day_plan(data, "2026-11-05", now=day_now)
+    assert not any("Day 2:" in u["title"] for u in plan.unscheduled)
+
+
+def test_syllabus_import_creates_goal_and_day_wise_tasks(tmp_path, data_env):
+    from focus_agent.media_import import import_syllabus_pdf
+    syl_file = tmp_path / "computer_networks_syllabus.txt"
+    syl_file.write_text(
+        "Module 1: OSI Model and Layer Architecture\n"
+        "Module 2: IPv4 Subnetting and CIDR\n"
+        "Module 3: Ethernet Switching and VLANs\n"
+        "Module 4: Routing Protocols OSPF and BGP\n",
+        encoding="utf-8",
+    )
+    data = _rich_student_data()
+    data["settings"] = {"agent": {"provider": "none"}}
+    res = import_syllabus_pdf(str(syl_file), data)
+    assert res["ok"] is True
+    assert len(data["goals"]) == 1
+    assert len(data["goals"][0]["milestones"]) >= 4
+    linked = [t for t in data["tasks"] if t.get("goal_id") == res["goal_id"]]
+    assert len(linked) >= 4
+
+
+def test_export_plan_to_ics_creates_valid_calendar(tmp_path):
+    from focus_agent import scheduler as fsched
+    from focus_agent.media_import import export_plan_to_ics
+    import logic
+    data = _rich_student_data()
+    logic.add_task_logic(data, "Study OSI Model", deadline="2026-11-05", duration=60)
+    plan = fsched.generate_day_plan(data, "2026-11-05", now=datetime(2026, 11, 5, 14, 0))
+    ics_file = tmp_path / "schedule.ics"
+    ok, msg = export_plan_to_ics(plan, str(ics_file))
+    assert ok is True
+    content = ics_file.read_text(encoding="utf-8")
+    assert "BEGIN:VCALENDAR" in content
+    assert "SUMMARY:Study OSI Model" in content
+
+

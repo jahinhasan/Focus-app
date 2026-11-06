@@ -232,20 +232,36 @@ class ReportView(ctk.CTkFrame):
             font=FONTS["header"], text_color=COLORS["accent"]
         ).pack(side="left")
 
-        def run_bench():
-            try:
-                import evaluate
-                self._bench_summary = evaluate.run_benchmark_summary()
-                self.render()
-            except Exception as e:
-                messagebox.showerror("Benchmark Error", str(e))
-
-        ctk.CTkButton(
+        bench_btn = ctk.CTkButton(
             head, text="▶ Run Agent Benchmark", width=170, height=30,
             fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
-            text_color="white", corner_radius=8, font=FONTS["small"],
-            command=run_bench
-        ).pack(side="right")
+            text_color="white", corner_radius=8, font=FONTS["small"]
+        )
+        bench_btn.pack(side="right")
+
+        def run_bench():
+            bench_btn.configure(state="disabled", text="⏳ Running 49 Tests…")
+            def worker():
+                err_msg = None
+                summary = None
+                try:
+                    import evaluate
+                    summary = evaluate.run_benchmark_summary()
+                except Exception as e:
+                    err_msg = str(e)
+                def finish():
+                    if not self.winfo_exists():
+                        return
+                    if err_msg:
+                        bench_btn.configure(state="normal", text="▶ Run Agent Benchmark")
+                        messagebox.showerror("Benchmark Error", err_msg)
+                    else:
+                        self._bench_summary = summary
+                        self.render()
+                self.after(0, finish)
+            threading.Thread(target=worker, daemon=True).start()
+
+        bench_btn.configure(command=run_bench)
 
         if self._bench_summary is None:
             try:

@@ -168,7 +168,7 @@ class GoalsView(ctk.CTkFrame):
     # ------------- actions -------------
 
     def prompt_new_goal(self):
-        title = simpledialog.askstring("New Goal", "Goal title (e.g. Learn AI/ML):", parent=self)
+        title = simpledialog.askstring("New Goal", "Goal title (e.g. Learn Networking, Master Python):", parent=self)
         if not title:
             return
         target = simpledialog.askstring("New Goal", "Target date YYYY-MM-DD (optional):", parent=self)
@@ -176,10 +176,31 @@ class GoalsView(ctk.CTkFrame):
         if target and not valid_date(target):
             messagebox.showerror("Goals", "Date must be YYYY-MM-DD")
             return
-        goal, err = fgoals.add_goal(self.app.data, title, target_date=target)
+        draft, _ = fgoals.generate_roadmap_draft(title, weeks=8, hours_per_week=8)
+        ms_list = draft.get("milestones", []) if draft else []
+        if not target and ms_list:
+            target = ms_list[-1].get("target_date")
+        goal, err = fgoals.add_goal(self.app.data, title, target_date=target, milestones=ms_list)
         if err:
             messagebox.showerror("Goals", err)
         else:
+            # Also schedule Day-Wise Dashboard tasks automatically
+            import re as _re
+            now_date = datetime.now().date()
+            subj = _re.sub(r"^(?:learn|master|study)\s+", "", title, flags=_re.IGNORECASE).strip() or title
+            existing_titles = {(t.get("title") or "").lower() for t in self.app.data.get("tasks", [])}
+            for idx, mm in enumerate(ms_list, start=1):
+                day_date = (now_date + timedelta(days=idx - 1)).isoformat()
+                clean_ms = _re.sub(r"^\d+[\.\)]\s*", "", mm.get("title", "")).strip()
+                t_title = f"Day {idx}: {clean_ms}"
+                if t_title.lower() not in existing_titles:
+                    add_task_logic(
+                        self.app.data, title=t_title, deadline=day_date,
+                        duration=60, subject=subj, goal_id=goal["id"],
+                        notes=f"Part of '{goal['title']}' roadmap (Milestone {idx})"
+                    )
+            if "today" in self.app.views:
+                self.app.views["today"].render()
             self.render()
 
     def prompt_new_milestone(self, goal):

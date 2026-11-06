@@ -42,8 +42,8 @@ class FileParser:
             return self._parse_docx(file_path)
         elif ext in ['.png', '.jpg', '.jpeg', '.bmp']:
             return self._parse_image(file_path)
-        elif ext == '.txt':
-            with open(file_path, 'r', encoding='utf-8') as f:
+        elif ext in ['.txt', '.md', '.csv']:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read()
         else:
             raise ValueError(f"Unsupported file format: {ext}")
@@ -57,7 +57,9 @@ class FileParser:
             with open(path, 'rb') as f:
                 reader = pypdf.PdfReader(f)
                 for page in reader.pages:
-                    text.append(page.extract_text())
+                    page_txt = page.extract_text()
+                    if page_txt:
+                        text.append(page_txt)
         except Exception as e:
             return f"Error reading PDF: {e}"
             

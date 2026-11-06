@@ -157,15 +157,32 @@ class ChatView(ctk.CTkFrame):
         self.entry.pack(side="left", fill="both", expand=True, padx=(16, 8), pady=8)
         self.entry.bind("<Return>", lambda e: self.send_message())
 
-        ctk.CTkButton(input_frame, text="📎 Routine Image", width=115, height=34, corner_radius=10,
-                      fg_color=COLORS["bg_secondary"], text_color=COLORS["accent"],
-                      hover_color=COLORS["card_hover"], font=FONTS["small"],
-                      command=self.upload_image).pack(side="left", padx=4)
+        self.voice_btn = ctk.CTkButton(
+            input_frame, text="🎤 Voice", width=78, height=34, corner_radius=10,
+            fg_color=COLORS["bg_secondary"], text_color=COLORS["accent"],
+            hover_color=COLORS["card_hover"], font=FONTS["small"],
+            command=self.start_voice_input
+        )
+        self.voice_btn.pack(side="left", padx=3)
 
-        self.send_btn = ctk.CTkButton(input_frame, text="Send ✦", width=95, height=34, corner_radius=10,
+        ctk.CTkButton(
+            input_frame, text="📄 Syllabus PDF", width=108, height=34, corner_radius=10,
+            fg_color=COLORS["bg_secondary"], text_color=COLORS["accent"],
+            hover_color=COLORS["card_hover"], font=FONTS["small"],
+            command=self.upload_syllabus_pdf
+        ).pack(side="left", padx=3)
+
+        ctk.CTkButton(
+            input_frame, text="📎 Routine", width=90, height=34, corner_radius=10,
+            fg_color=COLORS["bg_secondary"], text_color=COLORS["accent"],
+            hover_color=COLORS["card_hover"], font=FONTS["small"],
+            command=self.upload_image
+        ).pack(side="left", padx=3)
+
+        self.send_btn = ctk.CTkButton(input_frame, text="Send ✦", width=90, height=34, corner_radius=10,
                                       fg_color=COLORS["accent"], hover_color=COLORS["accent_dark"],
                                       text_color="white", command=self.send_message)
-        self.send_btn.pack(side="right", padx=10)
+        self.send_btn.pack(side="right", padx=8)
 
         if not self.history:
             self.add_message("assistant",
@@ -462,35 +479,104 @@ class ChatView(ctk.CTkFrame):
                for t in touched) and "goals" in self.app.views:
             self.app.views["goals"].render()
 
-    # ---------------- legacy image import (routine scan) ----------------
+    # ---------------- voice, syllabus PDF & routine image import ----------------
+
+    def start_voice_input(self):
+        """Record 5s of voice (Bangla/English) on a background thread and send to agent."""
+        if self._busy:
+            return
+        self.voice_btn.configure(text="🔴 Listening…", state="disabled")
+        thinking_lbl = self.add_message("assistant", "🎙️ Listening for 5 seconds… Speak in Bangla or English!", is_temporary=True)
+
+        def worker():
+            from focus_agent.media_import import record_and_transcribe_voice
+            txt, err = record_and_transcribe_voice(duration_sec=5)
+            def done():
+                try:
+                    if thinking_lbl and thinking_lbl.winfo_exists():
+                        thinking_lbl.destroy()
+                    if hasattr(self, "voice_btn") and self.voice_btn.winfo_exists():
+                        self.voice_btn.configure(text="🎤 Voice", state="normal")
+                except Exception:
+                    pass
+                if txt:
+                    self.entry.delete(0, "end")
+                    self.entry.insert(0, txt)
+                    self.send_message()
+                else:
+                    self.add_message("assistant", f"🎙️ {err or 'Could not capture audio.'}", render_only=True)
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def upload_syllabus_pdf(self):
+        """Import a course syllabus or assignment PDF/DOCX/TXT into Goals + Day-Wise Dashboard tasks."""
+        if self._busy:
+            return
+        file_path = filedialog.askopenfilename(
+            title="Select Course Syllabus or Assignment (PDF, DOCX, TXT)",
+            filetypes=[("Documents", "*.pdf *.docx *.txt"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return
+        self.add_message("user", f"📄 Uploaded syllabus: {os.path.basename(file_path)}")
+        self._set_busy(True)
+        thinking_lbl = self.add_message("assistant", "Analyzing syllabus & building Day-Wise Roadmap… 📚", is_temporary=True)
+
+        def worker():
+            from focus_agent.media_import import import_syllabus_pdf
+            res = import_syllabus_pdf(file_path, self.app.data)
+            def done():
+                try:
+                    if thinking_lbl and thinking_lbl.winfo_exists():
+                        thinking_lbl.destroy()
+                except Exception:
+                    pass
+                self.add_message("assistant", res.get("message", "Syllabus processed."))
+                if res.get("ok"):
+                    if "today" in self.app.views:
+                        self.app.views["today"].render()
+                    if "goals" in self.app.views:
+                        self.app.views["goals"].render()
+                    self.app.refresh_xp()
+                self._set_busy(False)
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
 
     def upload_image(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")])
-        if file_path:
-            self.add_message("user", f"Uploaded image: {os.path.basename(file_path)}")
+        if self._busy:
+            return
+        file_path = filedialog.askopenfilename(filetypes=[("Image / PDF files", "*.png *.jpg *.jpeg *.bmp *.pdf")])
+        if not file_path:
+            return
+        self.add_message("user", f"📎 Uploaded routine file: {os.path.basename(file_path)}")
+        self._set_busy(True)
+        thinking_lbl = self.add_message("assistant", "Analyzing routine… 🖼️", is_temporary=True)
 
+        def worker():
             from focus_agent.media_import import parse_file_with_ai
-
-            thinking_lbl = self.add_message("assistant", "Analyzing image… 🖼️", is_temporary=True)
-            self.update()
-
             result = parse_file_with_ai(file_path)
-            thinking_lbl.destroy()
-
-            if result:
-                msg = result.get("message", "I've analyzed the image.")
-                if result.get("intent") == "schedule_file":
-                    classes = result.get("classes", [])
-                    if classes:
-                        from logic import save_routine_from_parser
-                        save_routine_from_parser(self.app.data, classes)
-                    msg = f"✅ I found {len(classes)} classes in that image! Review them in the Routine tab."
-                    if "routine" in self.app.views:
-                        self.app.views["routine"].render()
-
-                self.add_message("assistant", msg)
-            else:
-                self.add_message("assistant", "I couldn't read information from that image. Make sure it's clear!")
+            def done():
+                try:
+                    if thinking_lbl and thinking_lbl.winfo_exists():
+                        thinking_lbl.destroy()
+                except Exception:
+                    pass
+                if result:
+                    msg = result.get("message", "I've analyzed the file.")
+                    if result.get("intent") == "schedule_file":
+                        classes = result.get("classes", [])
+                        if classes:
+                            from logic import save_routine_from_parser
+                            save_routine_from_parser(self.app.data, classes)
+                        msg = f"✅ I found {len(classes)} classes in that file! Review them in the Class Routine tab."
+                        if "routine" in self.app.views:
+                            self.app.views["routine"].render()
+                    self.add_message("assistant", msg)
+                else:
+                    self.add_message("assistant", "I couldn't read information from that file. Make sure it's clear!")
+                self._set_busy(False)
+            self.after(0, done)
+        threading.Thread(target=worker, daemon=True).start()
 
 
 # ==================== PLANNER VIEW ====================

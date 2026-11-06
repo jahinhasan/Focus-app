@@ -1,21 +1,21 @@
 # ✦ Focus Agent V2 — Intelligent Agent-Based Student Productivity System
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![Ollama](https://img.shields.io/badge/LLM-Ollama_(Local_AI)-654FF0)](https://ollama.com)
+[![Ollama](https://img.shields.io/badge/LLM-Auto--Hybrid_(Local_Ollama_%2B_Online_Knowledge)-654FF0)](https://ollama.com)
 [![Languages](https://img.shields.io/badge/NLU-English_%7C_Bangla_%7C_Banglish-059669)](#3-natural-language-commands-english--banglish--%E0%A6%AC%E0%A6%BE%E0%A6%82%E0%A6%B2%E0%A6%BE)
-[![Tests](https://img.shields.io/badge/Tests-227_Passing-brightgreen)](#8-running-tests--evaluation-benchmark)
+[![Tests](https://img.shields.io/badge/Tests-230_Passing-brightgreen)](#8-running-tests--evaluation-benchmark)
 [![Benchmark](https://img.shields.io/badge/Benchmark-49%2F49_(100%25)-success)](docs/EVALUATION.md)
 
-**Focus Agent V2** is an **Agent-Based Intelligent Student Productivity Management System** built with Python, CustomTkinter, Pydantic, and local LLMs via Ollama.
+**Focus Agent V2** is an **Agent-Based Intelligent Student Productivity Management System** built with Python, CustomTkinter, Pydantic, and an **Auto-Hybrid AI Engine** (Local Ollama `qwen3:4b` + Live Online Topic Knowledge + Deterministic NLU).
 
-Unlike ordinary to-do lists or simple chatbots, Focus Agent V2 uses a **structured autonomous AI agent loop** that understands natural-language instructions in **English, বাংলা (Bengali), and Banglish**, automatically detects academic subjects from your class routine, executes verified tools, calibrates time estimates from your historical completion data, and generates conflict-free daily study schedules around your classes and deadlines.
+Unlike ordinary to-do lists or simple chatbots, Focus Agent V2 uses a **structured autonomous AI agent loop** that understands natural-language instructions in **English, বাংলা (Bengali), and Banglish**, automatically detects academic subjects from your class routine, generates **full learning roadmaps with milestones + Day-Wise Dashboard study sessions**, imports course syllabi from PDFs, accepts voice commands, calibrates time estimates from your historical completion data, and builds conflict-free daily study schedules around your classes and deadlines.
 
 ---
 
 ## 📑 Table of Contents
 
 1. [Key Features](#-1-key-features)
-2. [Quick Start & Installation Guide](#-2-quick-start--installation-guide-for-new-users)
+2. [One-Click Auto-Setup & Launch (Windows & Linux)](#-2-one-click-auto-setup--launch-windows--linux)
 3. [Natural-Language Commands (English, Banglish & বাংলা)](#-3-natural-language-commands-english--banglish--বাংলা)
 4. [AI Agent Architecture & Workflow](#-4-ai-agent-architecture--workflow)
 5. [Project Directory Structure](#-5-project-directory-structure)
@@ -28,59 +28,56 @@ Unlike ordinary to-do lists or simple chatbots, Focus Agent V2 uses a **structur
 
 ## ✨ 1. Key Features
 
-- **🤖 Autonomous AI Agent Loop with Verified Tool Execution**:
-  - Converts natural-language productivity instructions into validated tool calls (`create_task`, `update_task`, `complete_task`, `delete_task`, `plan_day`, `create_goal`, `get_productivity_report`, etc.).
-  - Never touches raw storage directly from the LLM — every action goes through typed schemas and read-back verification.
-- **🌐 Multilingual Natural-Language Understanding (English + Banglish + বাংলা)**:
-  - Understands student instructions naturally in English, Banglish (`"amar kal math assignment joma dite hobe rat 8 tar modhe"`), and Bengali (`"আগামীকাল গণিত অ্যাসাইনমেন্ট জমা দিতে হবে রাত ৮টার মধ্যে"`).
-  - Extracts task titles, relative dates (`tomorrow`, `next Thursday`, `kal`, `porshu`, `আগামীকাল`), due times (`rat 8 tar modhe` → `20:00`, `by 5pm` → `17:00`), durations (`2 hours`, `der ghonta`, `৩০ মিনিট`), and difficulty (`hard`, `kothin`, `কঠিন`).
-  - Includes an **Anti-Hallucination Guard** and **Deterministic Offline Fallback** so every feature works reliably even if the LLM is offline.
-- **📚 Automatic Subject Detection**:
-  - Matches tasks to your **Class Routine** and **Subject Vault** automatically (including built-in academic aliases such as `math` → `Mathematics`, `dbms` → `Database Systems`, `networking` / `cn` → `Data Communication`, `os` → `Operating Systems`, `ai` → `Artificial Intelligence`).
-- **🗓️ Intelligent Conflict-Free Daily Planner**:
-  - Locks fixed class routine blocks first, then schedules open tasks into free study windows using a multi-factor priority score (**Urgency + Difficulty + Importance + Duration**), splitting long tasks into focused Pomodoro blocks with breaks.
+- **⚡ True One-Click Auto-Installer & Launcher (`run_windows.bat` & `run_linux.sh`)**:
+  - Automatically creates the Python virtual environment (`.venv`), installs all Python dependencies (`requirements.txt`), installs & starts **Ollama**, pulls the local **`qwen3:4b`** AI model if missing, and launches the app with a single click!
+- **🌐 Auto-Hybrid AI Routing (Local LLM + Live Online Knowledge — Zero API Key Required)**:
+  - Automatically combines local `Ollama (qwen3:4b)` inference with live online encyclopedic knowledge (Wikipedia REST API) for any study topic or roadmap without requiring the user to manually switch providers or pay for API keys.
+  - Also supports optional cloud acceleration (`GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`) automatically when present in environment variables.
+- **🎯 Smart Goal Roadmaps + Automatic Day-Wise Dashboard Scheduling**:
+  - Say *"ami networking shikte cai amk a full milestone soho banay dao"* or *"I want to learn Machine Learning"* — the agent creates a 6-milestone curriculum in **Goals & Roadmaps** AND automatically schedules **Day 1 (Today), Day 2 (Tomorrow), Day 3...** study tasks directly onto your **Dashboard**!
+- **📄 Syllabus PDF Import & 🎤 Multilingual Voice Input**:
+  - Upload any Course Syllabus or Assignment `.pdf` / `.docx` / `.txt` in the AI Agent Console (`📄 Syllabus PDF`) to automatically generate a Goal Roadmap and Day-Wise study tasks.
+  - Click `🎤 Voice` on the Dashboard or AI Agent Console to speak commands in Bangla or English.
+- **🎓 Smart Exam Countdown & Conflict-Free Daily Planner (`.ics` Export)**:
+  - Automatically detects upcoming exams (`exam`, `midterm`, `final`, `porikkha`, `পরীক্ষা`) and displays a live **Exam Countdown Banner** on your Dashboard.
+  - Generates conflict-free daily study blocks around your class routine and exports schedules to `.ics` (Google Calendar / Outlook / Apple Calendar) in one click.
 - **🧠 Historical Learning & Duration Calibration**:
   - Tracks estimated vs. actual completion time per subject and automatically adjusts future study time estimates (`focus_agent/estimator.py`) as it learns your real working pace.
-- **🔍 Real-Time Agent Reasoning Trace & Proactive Morning Briefing**:
-  - Displays a live **`🔍 Agent Trace`** showing detected intent, extracted fields, matched subject, and executed tools.
-  - Automatically alerts you on startup about overdue tasks or heavy tomorrow deadlines with a 1-click **`⚡ Auto-Plan Today`** action.
 - **🎨 Responsive Modern Academic UI (Light & Dark Mode)**:
-  - Live reactive typography (`CTkFont`), adaptive sidebar (always keeping icon + label readable), responsive KPI grid (`2×2` on compact screens, `1×4` on wide screens), and 1-click **`▶ Focus`** timer integration from both Task Cards and Daily Planner slots.
+  - Live reactive typography (`CTkFont`), adaptive sidebar (always keeping icon + label readable), responsive KPI grid (`2×2` on compact screens, `1×4` on wide screens), and 1-click **`▶ Start`** timer integration from both Task Cards and Daily Planner slots.
 
 ---
 
-## 🚀 2. Quick Start & Installation Guide (For New Users)
+## 🚀 2. One-Click Auto-Setup & Launch (Windows & Linux)
 
-Anyone cloning this repository can run the project on **Linux, Windows, or macOS** in a few minutes.
+When you clone this project on **any new Windows or Linux computer**, you do **NOT** need to manually install packages or download the LLM — a single script does everything automatically!
 
-### Prerequisites
+### ⚡ Option A: One-Click Automatic Setup & Run (Recommended)
 
-1. **Python 3.10 or newer** (`python3 --version`)
-2. **Tkinter** (included by default on Windows/macOS; on Ubuntu/Debian Linux install via `sudo apt install python3-tk`)
-3. **Git** (`git --version`)
-4. *(Recommended for Local AI)* **[Ollama](https://ollama.com/download)** for 100% local, private LLM inference (no API keys required).
-   > **Note:** Even if Ollama is not installed or is offline, Focus Agent V2 runs seamlessly using its built-in deterministic NLU engine!
+#### 🐧 On Linux / macOS:
+```bash
+git clone https://github.com/jahinhasan/Focus-app.git
+cd Focus-app
+./run_linux.sh
+```
 
----
+#### 🪟 On Windows (Double-Click or Command Prompt):
+Simply **double-click `run_windows.bat`** in File Explorer, or run in Command Prompt / PowerShell:
+```cmd
+git clone https://github.com/jahinhasan/Focus-app.git
+cd Focus-app
+run_windows.bat
+```
 
-### Option A: One-Command Setup
-
-- **Linux / macOS:**
-  ```bash
-  git clone https://github.com/jahinhasan/Focus-app.git
-  cd Focus-app
-  bash setup.sh
-  ```
-- **Windows:**
-  ```cmd
-  git clone https://github.com/jahinhasan/Focus-app.git
-  cd Focus-app
-  setup.bat
-  ```
+#### 🐍 Universal Cross-Platform Python Bootstrap:
+```bash
+python3 setup_and_run.py
+```
+*(What it does automatically: creates `.venv` → installs `requirements.txt` → installs & starts `Ollama` → pulls `qwen3:4b` local AI model → launches `main.py`!)*
 
 ---
 
-### Option B: Manual Step-by-Step Setup
+### 🛠️ Option B: Manual Step-by-Step Setup
 
 #### Step 1: Clone the Repository
 ```bash
@@ -106,19 +103,16 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-#### Step 4: Set Up Local AI with Ollama *(Recommended)*
+#### Step 4: Set Up Local AI with Ollama *(Automatic via `setup_and_run.py`, or manual below)*
 1. Download and install [Ollama](https://ollama.com/download).
-2. Pull the default lightweight model (`qwen3:4b` or any model you prefer):
+2. Pull the default lightweight model (`qwen3:4b`):
    ```bash
    ollama pull qwen3:4b
    ```
-3. Make sure the Ollama service is running (`ollama serve` or background desktop app).
-   *(You can change the model name or switch between `ollama`, `online`, or `none` anytime inside **⚙️ Settings → AI Agent & LLM** in the app).*
-
-#### Step 5: Launch Focus Agent V2
-```bash
-python main.py
-```
+3. Launch Focus Agent V2:
+   ```bash
+   python main.py
+   ```
 
 ---
 

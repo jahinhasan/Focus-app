@@ -297,25 +297,31 @@ class VaultView(ctk.CTkFrame):
         top.geometry("600x500")
         top.attributes("-topmost", True)
         
-        lbl = ctk.CTkLabel(top, text="🔄 Generating summary with Gemini...", font=FONTS["body"])
+        lbl = ctk.CTkLabel(top, text="🔄 Generating AI Summary...", font=FONTS["body"])
         lbl.pack(pady=20)
         
         txt = ctk.CTkTextbox(top, font=FONTS["body"], wrap="word")
         txt.pack(fill="both", expand=True, padx=20, pady=10)
-        txt.insert("1.0", "Please wait while I read the document...")
+        txt.insert("1.0", "Please wait while Focus Agent reads and summarizes the document...")
         txt.configure(state="disabled")
         
         def run_summ():
             from focus_agent.media_import import summarize_with_ai
             summary = summarize_with_ai(path)
-            txt.configure(state="normal")
-            txt.delete("1.0", "end")
-            txt.insert("1.0", summary)
-            txt.configure(state="disabled")
-            lbl.configure(text="✨ Summary Generated")
+            def apply_ui():
+                try:
+                    if not top.winfo_exists():
+                        return
+                    txt.configure(state="normal")
+                    txt.delete("1.0", "end")
+                    txt.insert("1.0", summary)
+                    txt.configure(state="disabled")
+                    lbl.configure(text="✨ Summary Generated")
+                except Exception:
+                    pass
+            self.after(0, apply_ui)
 
         # Run in a separate thread to avoid freezing UI
-        import threading
         threading.Thread(target=run_summ, daemon=True).start()
 
 
